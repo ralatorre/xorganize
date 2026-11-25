@@ -37,9 +37,11 @@ test('manifest requests the bare minimum', async () => {
   expect(manifest.externally_connectable).toBeUndefined();
 
   // Extension code can load only its own files and cannot make network requests.
+  // The one exception is images from X's image server (docs/SPEC.md, 6.2).
   expect(manifest.content_security_policy).toEqual({
     extension_pages:
-      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; " +
+      "default-src 'none'; script-src 'self'; style-src 'self'; " +
+      "img-src 'self' https://pbs.twimg.com; " +
       "font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; " +
       "frame-ancestors 'none'",
   });

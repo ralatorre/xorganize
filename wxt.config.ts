@@ -1,18 +1,21 @@
 import preact from '@preact/preset-vite';
 import { defineConfig } from 'wxt';
+import { X_IMAGE_HOST } from './src/hosts';
 
 /**
  * Applied to every extension page and to the background worker.
  *
  * `connect-src 'none'` means the browser itself refuses any network request
  * from extension code, so "nothing leaves the device" does not rest on the
- * code being well behaved. Only the extension's own packaged files can load.
+ * code being well behaved. Only the extension's own packaged files can load,
+ * plus images from X's image server for avatars and thumbnails in the library
+ * (docs/SPEC.md, section 6.2).
  */
 const CONTENT_SECURITY_POLICY = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self'",
-  "img-src 'self'",
+  `img-src 'self' https://${X_IMAGE_HOST}`,
   "font-src 'self'",
   "connect-src 'none'",
   "base-uri 'none'",

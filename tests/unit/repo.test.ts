@@ -7,10 +7,12 @@ import {
   counts,
   mergePost,
   postsBySource,
+  readSettings,
   recentKey,
   saveCapture,
   sortKey,
   unknownKey,
+  updateSettings,
   type CaptureBatch,
 } from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
@@ -439,5 +441,20 @@ describe('the order of a source', () => {
 
     const likes = await postsBySource(db, ACCOUNT, 'like', 10);
     expect(likes.map((item) => item.id)).toEqual(['11', '21', '22', '32', '31']);
+  });
+});
+
+describe('settings', () => {
+  it('show images from X unless turned off', async () => {
+    expect(await readSettings(db)).toEqual({ remoteImages: true });
+    expect(await updateSettings(db, { remoteImages: false })).toEqual({ remoteImages: false });
+    expect(await readSettings(db)).toEqual({ remoteImages: false });
+  });
+
+  it('fall back to defaults for values of the wrong type', async () => {
+    await db.meta.put({ accountId: '', key: 'settings', value: { remoteImages: 'no' } });
+    expect(await readSettings(db)).toEqual({ remoteImages: true });
+    await db.meta.put({ accountId: '', key: 'settings', value: 'garbage' });
+    expect(await readSettings(db)).toEqual({ remoteImages: true });
   });
 });

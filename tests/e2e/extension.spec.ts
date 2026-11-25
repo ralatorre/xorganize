@@ -100,6 +100,42 @@ test('the browser blocks network requests from extension pages', async ({
   expect(outcome).toEqual({ fetched: 'refused', violation: 'connect-src https://x.com/' });
 });
 
+test("extension pages can load images from X's image server and nowhere else", async ({
+  context,
+  extensionId,
+}) => {
+  // Both would succeed if they were allowed out: they are answered here.
+  await context.route(/^https:\/\/(pbs\.twimg\.com|abs\.twimg\.com)\//, (route) =>
+    route.fulfill({ contentType: 'text/plain', body: 'reached' }),
+  );
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/library.html`);
+
+  const violations = await page.evaluate(async () => {
+    const seen: string[] = [];
+    document.addEventListener('securitypolicyviolation', (event) =>
+      seen.push(`${event.effectiveDirective} ${event.blockedURI}`),
+    );
+    // Images, yes, but not script access to the same server.
+    await fetch('https://pbs.twimg.com/media/a.jpg').catch(() => undefined);
+    const image = (src: string) =>
+      new Promise<void>((resolve) => {
+        const element = new Image();
+        element.onload = element.onerror = () => resolve();
+        element.src = src;
+      });
+    await image('https://pbs.twimg.com/media/b.jpg');
+    await image('https://abs.twimg.com/c.png');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return seen;
+  });
+
+  expect(violations.sort()).toEqual([
+    'connect-src https://pbs.twimg.com/media/a.jpg',
+    'img-src https://abs.twimg.com/c.png',
+  ]);
+});
+
 test('the browser blocks network requests from the background worker', async ({
   serviceWorker,
 }) => {

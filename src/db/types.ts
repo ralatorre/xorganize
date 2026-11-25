@@ -69,3 +69,9 @@ export interface Counts {
   bookmarks: number;
   likes: number;
 }
+
+/** Preferences, kept in the `meta` table so that no `storage` permission is needed. */
+export interface Settings {
+  /** Show avatars and media thumbnails, which the browser loads from X's image server. */
+  remoteImages: boolean;
+}

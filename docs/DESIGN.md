@@ -218,6 +218,7 @@ The toolbar icon shows a small badge while a capture session is running.
 | Capture | Prompt for tags after bookmarking | On |
 | Capture | Prompt for tags after liking | Off |
 | Library | Keep posts after they are unbookmarked or unliked | Tagged posts only |
+| Library | Show images from X (avatars and thumbnails, loaded without cookies) | On |
 | Appearance | Theme | Follow X on x.com, follow system in the library |
 | Shortcuts | Open tag popover | `Alt+T` |
 | Data | Export library (JSON backup, or CSV) | |
@@ -293,7 +294,7 @@ The post loses that source. Depending on the "Keep posts" setting it stays in th
 | Storage nearly full | A warning in settings, with a suggestion to export. |
 | Two tabs edit the same post | Last write wins. Both tabs update live. |
 | Very long posts | Card shows four lines with "Show more". Full text is stored and searchable. |
-| Sensitive media | Thumbnails X marks as sensitive are blurred until clicked. |
+| Sensitive media | Thumbnails X marks as sensitive are not loaded until "Show sensitive media" is clicked. |
 
 ## 7. Visual design, theming, accessibility
 

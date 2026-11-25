@@ -23,6 +23,7 @@ export interface RawPostOptions {
   wrapped?: boolean;
   /** Put the author's handle and name where the API used to keep them. */
   legacyAuthor?: boolean;
+  avatarUrl?: string;
 }
 
 export function rawPost(options: RawPostOptions): Record<string, unknown> {
@@ -46,7 +47,7 @@ export function rawPost(options: RawPostOptions): Record<string, unknown> {
               }
             : {
                 core: { screen_name: handle, name },
-                avatar: { image_url: 'https://media.example/avatar.jpg' },
+                avatar: { image_url: options.avatarUrl ?? 'https://media.example/avatar.jpg' },
               }),
         },
       },

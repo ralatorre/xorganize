@@ -178,9 +178,19 @@ The policy applies to every extension page and to the background worker.
 
 - `connect-src 'none'`: the browser refuses any network request from extension code. "Nothing leaves the device" is enforced by the browser, not only promised by the code.
 - `default-src 'none'` with `'self'` for scripts, styles, images and fonts: only files packaged with the extension can load. No remote code, no inline script, no `eval`.
+- `img-src` also allows `https://pbs.twimg.com`, X's image server, and nothing else. See below.
 - `base-uri`, `form-action`, `frame-ancestors` are `'none'`: pages cannot be re-based, cannot submit forms anywhere, and cannot be framed.
 
-One planned relaxation: when the library shows avatars and media thumbnails (M3), `img-src` gains X's image hosts and nothing else. Those image requests go to X's servers, as they do when browsing X, and they carry no cookies or referrer. A setting will allow remote images to be turned off entirely.
+**Images from X.** The library shows avatars and media thumbnails, so `img-src` allows X's image server. This was planned for M3 and brought forward. It is the only exception to "only packaged files", and it is deliberately narrow:
+
+- One host. Avatars, photos and the still images of videos and gifs are all on `pbs.twimg.com`, confirmed against a real account on 2026-11-25. Video files (`video.twimg.com`) are never loaded, and X's default avatars (`abs.twimg.com`) are not allowed either: those posts show the author's initial instead. Code checks every URL against the same host before rendering it (`xImageUrl` in `src/hosts.ts`), so a URL from anywhere else becomes a placeholder rather than a request that the policy then refuses.
+- No cookies. Every image is requested with `crossorigin="anonymous"`, so the browser leaves out cookies. Checked on 2026-11-25: `pbs.twimg.com` answers with `access-control-allow-origin` set to the requesting origin, `cross-origin-resource-policy: cross-origin`, and no `Set-Cookie`.
+- No referrer. `referrerpolicy="no-referrer"` on each image and a `no-referrer` meta tag on the page.
+- Images only. `connect-src` is still `'none'`, so extension code cannot read from that server with `fetch`. A test confirms this, and that an image from any other host is refused.
+- Media marked as sensitive is not requested until the user asks for it.
+- A setting turns images off. While it is off, the library requests nothing from X at all. It is on by default: each request reveals only the requesting IP address and an image address, to the company that already knows which posts this account has bookmarked and liked.
+
+The trade-off: with images on, X's image server can see that this browser is looking at those images at that moment, from outside x.com.
 
 The development server uses WXT's looser default policy for live reload. Production builds, and every automated test, use the strict one.
 
@@ -441,7 +451,7 @@ Rules:
 
 ### 9.3 Settings
 
-Stored in the `meta` table of the same IndexedDB database, validated on read, with defaults applied for missing fields. This avoids the `storage` permission altogether. Content scripts cannot open the database, so they receive settings from the service worker over the messaging port. Nothing is synced, so nothing leaves the device.
+Stored as one `settings` row in the `meta` table of the same IndexedDB database, validated on read, with defaults applied for missing fields or values of the wrong type (`readSettings` in `repo.ts`). The first setting is `remoteImages` (6.2). This avoids the `storage` permission altogether. Content scripts cannot open the database, so they receive settings from the service worker over the messaging port. Nothing is synced, so nothing leaves the device.
 
 ## 10. Messaging
 
@@ -467,7 +477,7 @@ The worker checks `sender.id`, that the message comes from the top frame, and th
 - **Data access.** Opens Dexie directly. Lists are driven by live queries, so changes made on x.com appear without a reload.
 - **Filtering.** Source and single-tag filters use the compound indexes. Multi-tag filters fetch the post ID set for each tag from `postTags` and intersect (Match All) or union (Match Any) in memory.
 - **Search.** On open, a MiniSearch index is built in a web worker from `text`, `author.handle` and `author.name` for the current account. It is updated incrementally from live-query changes. The query parser lifts `#tag` and `@handle` tokens out as structured filters and passes the rest to MiniSearch with prefix matching on the final term. Expected cost at 50,000 posts: an index build of a second or two, off the main thread, with the unfiltered list shown immediately.
-- **Rendering.** A virtualised list with measured row heights. Avatars and thumbnails are loaded lazily from X's media hosts with `referrerpolicy="no-referrer"`. These image loads are the only network activity, and they are issued by the browser for `<img>` elements, not by extension code.
+- **Rendering.** A virtualised list with measured row heights. Avatars and thumbnails are loaded lazily from X's image server without cookies or a referrer (6.2). These image loads are the only network activity. They are issued by the browser for `<img>` elements, not by extension code, and can be turned off in settings. Photos are requested at X's `small` size. Up to four thumbnails are shown per post.
 - **Sharing code.** The side panel imports the same app with a `compact` flag. The tag popover and tag chip components are shared with the injected UI.
 
 ## 12. Import and export
@@ -592,7 +602,7 @@ The repository is public, so the following never get committed:
 | M0 Skeleton | WXT project, both content scripts, service worker, empty library page, CI. | The extension loads and CI is green. |
 | M1 Capture | Interceptor, bridge, extraction, normalisation, database, account detection, capture banner without auto-scroll, for both the Bookmarks and Likes timelines. Verify every assumption in section 18. | Scrolling the Bookmarks page and the Likes tab fills the database, confirmed against a real free account. |
 | M2 Tagging | Tag button, popover, seen cache, DOM fallback, tag messages. | A post can be tagged from any timeline and the state survives a reload. |
-| M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. | A tagged post can be found by tag and by text. |
+| M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. Avatars and thumbnails were brought forward and are done. | A tagged post can be found by tag and by text. |
 | M4 Export | JSON and CSV export for the whole library and the current view, import with merge and replace, backup reminder, delete all. | Export then import into a clean profile reproduces the library, and a single tag can be exported to CSV. |
 | M5 Live capture | Bookmark and like mutations, tag prompt toast, auto-scroll. | Bookmarking or liking a post anywhere adds it without visiting the Bookmarks or Likes page. |
 | M6 Release | Side panel, popup, settings, welcome page, bulk actions, accessibility pass, Firefox build, store listing. | Published to the Chrome Web Store and Firefox Add-ons. |
@@ -627,13 +637,13 @@ From a first diagnostics run against a real free account on 2026-11-25, in Chrom
 | 1 | **Confirmed.** All calls go to `https://x.com/i/api/graphql/<id>/<OperationName>`. `Bookmarks`, `Likes` and `HomeTimeline` exist under those names. |
 | 2 | **Confirmed.** Every observed call used `XMLHttpRequest`, with `GET` for timelines. |
 | 3 | **Confirmed.** The interceptor saw the client's calls, so it is installed before the client takes its references. |
-| 4 | **Partly.** Entries carry `entryId` and `sortIndex`. A response holds post entries followed by a top cursor and a bottom cursor. Ordering of post entries still to be measured. |
+| 4 | **Confirmed** (by eye, 2026-11-25). Entries carry `entryId` and `sortIndex`. A response holds post entries followed by a top cursor and a bottom cursor. The library's bookmarks, ordered by sort index, matched the order on X, checked first as text and again with avatars and thumbnails shown. |
 | 5 | **Confirmed, with corrections.** The author's handle and name are at `core.user_results.result.core.*` and the avatar at `avatar.image_url`; the older `legacy.*` locations were absent. Text, long-form text, dates, language, media, links and quoted posts are where 7.4 expects. `TweetWithVisibilityResults` wraps a post under `.tweet`. Timeline roots: `data.bookmark_timeline_v2.timeline`, `data.user.result.timeline.timeline`, `data.home.home_timeline_urt`. |
 | 6 | **Confirmed** (second run). `CreateBookmark`, `DeleteBookmark`, `FavoriteTweet` and `UnfavoriteTweet` are `POST` requests whose JSON body carries the post ID at `variables.tweet_id`. |
 | 7 | **Confirmed.** The cookie is readable and matches the expected format. For `Likes`, `variables.userId` equalled the account's ID. |
 | 8 | **Confirmed.** Every selector in `src/dom/selectors.ts` matched on the home, bookmarks and likes pages. |
 | 9 | **Partly** (second run). A bookmarks list of about twenty posts was read to its end: the last page simply holds fewer posts, followed by the two cursors. Whether a long list is cut off after some number of posts is still unknown. |
 
-One finding not anticipated by the spec: every post carries `legacy.bookmarked` and `legacy.favorited`, the account's own state for that post. A post seen in any timeline therefore says whether it is bookmarked or liked, which gives a second way to keep sources accurate.
+One finding not anticipated by the spec: every post carries `legacy.bookmarked` and `legacy.favorited`, the account's own state for that post. A post seen in any timeline therefore says whether it is bookmarked or liked, which gives a second way to keep sources accurate. These flags can be trusted. In the test account, most bookmarks were also flagged as liked but not all of them, and the account owner confirmed that this matched what they had actually liked.
 
 The address of the bookmarks and likes pages was masked too aggressively in both runs to be read. The design no longer depends on it: the status line appears when a bookmarks or likes response is captured, not when a particular address is open.
