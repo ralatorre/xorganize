@@ -13,7 +13,7 @@ export interface CaptureBatch {
   /** The timeline the posts came from, or the change the user just made. */
   source?: SourceKind;
   /** Posts that belong to `source`, with their position in it when known. */
-  items: Array<{ post: CapturedPost; sortIndex?: string }>;
+  items: Array<{ post: CapturedPost; sortIndex?: string; partial?: boolean }>;
   /** Posts that other posts refer to: kept so those can be shown in full. */
   referenced: CapturedPost[];
   /** Posts that X reports as no longer available. */
@@ -24,23 +24,36 @@ const ACTIVE_ACCOUNT = 'activeAccount';
 const SORT_WIDTH = 30;
 
 /**
- * A string that sorts the way a timeline position does.
+ * Strings that sort the way positions in a bookmarks or likes list do. Three
+ * kinds, which sort in this order, highest first:
  *
- * A real sort index is padded to a fixed width, so string order matches
- * numeric order. A post the user has just bookmarked or liked has no index
- * yet, so it gets a provisional key from the time, behind a `~` that sorts
- * above every digit: newest first, until the timeline supplies the real one.
+ * 1. `recentKey`: the user bookmarked or liked the post just now. It belongs
+ *    at the top, newest first, until the timeline supplies its real position.
+ * 2. `sortKey`: the real position from the timeline, padded to a fixed width
+ *    so that string order matches numeric order.
+ * 3. `unknownKey`: the post is known to be bookmarked or liked only because
+ *    the API said so when it appeared somewhere else. When that happened is
+ *    not known, so it goes below everything with a real position, ordered by
+ *    the post's own date.
  */
-export function sortKey(sortIndex: string | undefined, now: number): string {
-  return sortIndex !== undefined
-    ? sortIndex.padStart(SORT_WIDTH, '0')
-    : `~${String(now).padStart(SORT_WIDTH - 1, '0')}`;
+export function sortKey(sortIndex: string): string {
+  return sortIndex.padStart(SORT_WIDTH, '0');
+}
+
+export function recentKey(now: number): string {
+  return `~${String(now).padStart(SORT_WIDTH - 1, '0')}`; // `~` sorts above every digit
+}
+
+export function unknownKey(createdAt: number | null): string {
+  return `!${String(Math.max(0, createdAt ?? 0)).padStart(SORT_WIDTH - 1, '0')}`; // `!` sorts below
 }
 
 export interface MergeContext {
   accountId: AccountId;
   source?: SourceKind;
   sortIndex?: string;
+  /** The post was read from the page, not the API, and holds only the basics. */
+  partial?: boolean;
   now: number;
 }
 
@@ -50,6 +63,7 @@ export interface MergeContext {
  * - Content comes from the new capture, which is the more recent.
  * - A source is set by the timeline or change the post arrived through, and
  *   otherwise follows the account's own state as the API reports it.
+ * - A partial capture never replaces the content of a full one.
  * - Timestamps of first sight and of entering the library never move forward.
  * - Tags and their flag are left alone.
  */
@@ -58,8 +72,11 @@ export function mergePost(
   captured: CapturedPost,
   context: MergeContext,
 ): StoredPost {
-  const { bookmarked, liked, ...content } = captured;
+  const { bookmarked, liked, ...fresh } = captured;
   const { now } = context;
+
+  const keepStored = context.partial === true && existing !== undefined && !existing.partial;
+  const content = keepStored ? contentOf(existing) : fresh;
 
   const flag = (source: SourceKind, reported: boolean | undefined, stored: 0 | 1): 0 | 1 => {
     if (context.source === source) return 1;
@@ -71,10 +88,14 @@ export function mergePost(
 
   const sort = (source: SourceKind, set: 0 | 1, stored: string | undefined) => {
     if (!set) return undefined;
-    if (context.source === source && context.sortIndex !== undefined) {
-      return sortKey(context.sortIndex, now);
+    if (context.source === source) {
+      // From the timeline: its real position. From a change just made: the top.
+      return context.sortIndex !== undefined
+        ? sortKey(context.sortIndex)
+        : (stored ?? recentKey(now));
     }
-    return stored ?? sortKey(undefined, now);
+    // Known only from the API's say-so on a post seen elsewhere.
+    return stored ?? unknownKey(content.createdAt);
   };
   const bookmarkSort = sort('bookmark', isBookmark, existing?.bookmarkSort);
   const likeSort = sort('like', isLike, existing?.likeSort);
@@ -87,11 +108,27 @@ export function mergePost(
     hasTags: existing?.hasTags ?? 0,
     ...(bookmarkSort !== undefined ? { bookmarkSort } : {}),
     ...(likeSort !== undefined ? { likeSort } : {}),
-    partial: false,
+    partial: context.partial === true && !keepStored,
     unavailable: false,
     firstSeenAt: existing?.firstSeenAt ?? now,
     lastSeenAt: now,
     savedAt: existing?.savedAt ?? now,
+  };
+}
+
+/** The fields of a stored post that describe the post itself. */
+function contentOf(post: StoredPost): Omit<CapturedPost, 'bookmarked' | 'liked'> {
+  return {
+    id: post.id,
+    url: post.url,
+    text: post.text,
+    createdAt: post.createdAt,
+    ...(post.lang !== undefined ? { lang: post.lang } : {}),
+    author: post.author,
+    media: post.media,
+    links: post.links,
+    ...(post.quotedId !== undefined ? { quotedId: post.quotedId } : {}),
+    sensitive: post.sensitive,
   };
 }
 
@@ -103,15 +140,17 @@ export async function saveCapture(
 ): Promise<Counts> {
   const { accountId } = batch;
   return db.transaction('rw', db.posts, db.meta, async () => {
-    const save = async (post: CapturedPost, source?: SourceKind, sortIndex?: string) => {
+    const save = async (post: CapturedPost, context: Partial<MergeContext> = {}) => {
       const existing = await db.posts.get([accountId, post.id]);
-      await db.posts.put(mergePost(existing, post, { accountId, source, sortIndex, now }));
+      await db.posts.put(mergePost(existing, post, { ...context, accountId, now }));
     };
 
     // Referenced posts first, so a post that is both referenced and an item
     // ends up with the item's source.
     for (const post of batch.referenced) await save(post);
-    for (const { post, sortIndex } of batch.items) await save(post, batch.source, sortIndex);
+    for (const { post, sortIndex, partial } of batch.items) {
+      await save(post, { source: batch.source, sortIndex, partial });
+    }
 
     for (const id of batch.unavailable) {
       await db.posts.update([accountId, id], { unavailable: true, lastSeenAt: now });
@@ -183,4 +222,13 @@ export function postsBySource(
 export async function activeAccount(db: LibraryDatabase): Promise<AccountId | undefined> {
   const row = await db.meta.get(['', ACTIVE_ACCOUNT]);
   return typeof row?.value === 'string' ? row.value : undefined;
+}
+
+/** How many of the account's posts are both bookmarked and liked. */
+export function countInBoth(db: LibraryDatabase, accountId: AccountId): Promise<number> {
+  return db.posts
+    .where('[accountId+isBookmark+bookmarkSort]')
+    .between([accountId, 1, Dexie.minKey], [accountId, 1, Dexie.maxKey])
+    .filter((post) => post.isLike === 1)
+    .count();
 }

@@ -5,6 +5,7 @@ import { viewerIdFromCookie } from '@/src/capture/account';
 import { createCapture } from '@/src/capture/pipeline';
 import { observeEnvironment } from '@/src/diagnostics/environment';
 import { observe } from '@/src/diagnostics/observe';
+import { postFromPage } from '@/src/dom/post-from-page';
 import { X_MATCHES } from '@/src/hosts';
 import { connectBridge } from '@/src/messaging/bridge';
 import type { CaptureReply, RuntimeMessage } from '@/src/messaging/protocol';
@@ -33,6 +34,7 @@ export default defineContentScript({
       send: (message) => send<CaptureReply>(message),
       onCaptured: (source, counts) => banner.show(source, counts),
       onFailed: () => banner.fail(),
+      postFromPage: (id) => postFromPage(id),
     });
 
     let environmentProbe: ReturnType<typeof setTimeout> | undefined;

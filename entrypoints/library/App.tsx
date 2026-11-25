@@ -1,7 +1,7 @@
 import { liveQuery } from 'dexie';
 import { useEffect, useState } from 'preact/hooks';
 import { DIAGNOSTICS } from '@/src/build';
-import { activeAccount, counts, postsBySource } from '@/src/db/repo';
+import { activeAccount, countInBoth, counts, postsBySource } from '@/src/db/repo';
 import { library } from '@/src/db/schema';
 import type { Counts, StoredPost } from '@/src/db/types';
 import { Diagnostics } from './Diagnostics';
@@ -10,22 +10,30 @@ const SHOWN = 50;
 
 interface Snapshot {
   totals: Counts;
+  /** Posts that are both bookmarked and liked, and so are counted in both totals. */
+  inBoth: number;
   bookmarks: StoredPost[];
   likes: StoredPost[];
 }
 
-const EMPTY: Snapshot = { totals: { bookmarks: 0, likes: 0 }, bookmarks: [], likes: [] };
+const EMPTY: Snapshot = {
+  totals: { bookmarks: 0, likes: 0 },
+  inBoth: 0,
+  bookmarks: [],
+  likes: [],
+};
 
 async function loadSnapshot(): Promise<Snapshot> {
   const db = library();
   const account = await activeAccount(db);
   if (account === undefined) return EMPTY;
-  const [totals, bookmarks, likes] = await Promise.all([
+  const [totals, inBoth, bookmarks, likes] = await Promise.all([
     counts(db, account),
+    countInBoth(db, account),
     postsBySource(db, account, 'bookmark', SHOWN),
     postsBySource(db, account, 'like', SHOWN),
   ]);
-  return { totals, bookmarks, likes };
+  return { totals, inBoth, bookmarks, likes };
 }
 
 /** The library's contents, kept up to date as the worker stores more. */
@@ -53,6 +61,7 @@ export function App() {
           <p class="library__totals">
             {plural(snapshot.totals.bookmarks, 'bookmark')} ·{' '}
             {plural(snapshot.totals.likes, 'like')}
+            {snapshot.inBoth > 0 ? ` · ${snapshot.inBoth.toLocaleString()} in both` : ''}
           </p>
         ) : null}
       </header>

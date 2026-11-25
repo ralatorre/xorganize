@@ -300,6 +300,8 @@ Shape changes must be visible, not silent.
 
 ### 7.6 Fallback from the DOM
 
+**Built** (`src/dom/post-from-page.ts`), for bookmark and like requests. Tagging will use it too.
+
 When the user tags a post that is missing from the seen cache (for example after the service worker and page have been open for a long time), a minimal record is built from the page:
 
 | Data | Selector (to verify) |
@@ -310,7 +312,7 @@ When the user tags a post that is missing from the seen cache (for example after
 | Text | `[data-testid="tweetText"]` |
 | Display name | `[data-testid="User-Name"]` |
 
-The record is flagged `partial: true`. It is upgraded to a full record the next time the post passes through the interceptor.
+The record is flagged `partial: true`. It is upgraded to a full record the next time the post passes through the interceptor. A partial record never replaces the content of a full one: if the post is already stored in full, only its source changes.
 
 ### 7.7 Identifying the account
 
@@ -413,7 +415,7 @@ interface Meta {
 Notes:
 
 - Posts quoted by a saved post are stored with `isBookmark`, `isLike` and `hasTags` all `0`. The library hides such records unless they are referenced by a visible post. A cleanup pass removes orphans.
-- Sort indexes are stored as fixed-width, zero-padded strings so that string comparison matches numeric order. A post the user has just bookmarked or liked has no index until its timeline is next loaded, so it gets a provisional key built from the time, prefixed with `~`, which sorts above every real index: newest first.
+- Sort indexes are stored as fixed-width, zero-padded strings so that string comparison matches numeric order. Two other kinds of key cover posts with no index yet. A post the user has just bookmarked or liked gets a key built from the time, prefixed with `~`, which sorts above every real index: newest first, at the top. A post known to be bookmarked or liked only because the API said so when it appeared in another timeline gets a key built from the post's own date, prefixed with `!`, which sorts below every real index: when it was bookmarked or liked is not known, so it must not be shown as if it were recent. Either is replaced by the real index when the timeline supplies it.
 - Sources follow two signals. A post arriving through a bookmarks or likes timeline, or through a bookmark or like request, gets that source. For the other source, the post's own `legacy.bookmarked` and `legacy.favorited` fields are followed when present, so a post seen in the bookmarks timeline that is also liked is recorded as both, and one that has since been unliked elsewhere loses the like.
 - When a source is removed and the post has no other source and no tags, the post is deleted. The "keep posts" setting (DESIGN 4.7) will make this configurable.
 - Tag use counts are computed with a count on the `postTags` index, not stored, so they cannot drift.

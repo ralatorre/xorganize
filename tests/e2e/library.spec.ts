@@ -27,7 +27,18 @@ const STAND_IN_PAGE = `<!doctype html>
     </script>
     <title>stand-in</title>
   </head>
-  <body style="background: rgb(0, 0, 0)"><main>stand-in page</main></body>
+  <body style="background: rgb(0, 0, 0)">
+    <main>
+      <!-- A post that is on the page but never arrives in any API response below. -->
+      <article data-testid="tweet">
+        <div data-testid="User-Name">
+          <span>Page Author</span><span>@page_author</span>
+          <a href="/page_author/status/501"><time datetime="2024-03-01T10:00:00.000Z">Mar 1</time></a>
+        </div>
+        <div data-testid="tweetText">Shown on the page only</div>
+      </article>
+    </main>
+  </body>
 </html>`;
 
 const RESPONSES: Record<string, unknown> = {
@@ -153,13 +164,25 @@ test('captures bookmarks and likes as they load, and keeps up with changes', asy
   await change(site, 'DeleteBookmark', '102');
   await change(site, 'UnfavoriteTweet', '301');
 
-  await expect(library.getByText('3 bookmarks · 3 likes')).toBeVisible();
+  // A post counted under both is counted once in each, and the header says so.
+  await expect(library.getByText('3 bookmarks · 3 likes · 2 in both')).toBeVisible();
   await expect
     .poll(() => texts(library, 'Bookmarks'))
     .toEqual(['Seen at home', 'Bookmark three, also liked', 'Bookmark one <b>not markup</b>']);
+  // Likes: the one just made, then those with a place in the likes timeline, then
+  // the one known to be liked only because the bookmarks timeline said so.
   await expect
     .poll(() => texts(library, 'Likes'))
-    .toEqual(['Seen at home', 'Bookmark three, also liked', 'Like two']);
+    .toEqual(['Seen at home', 'Like two', 'Bookmark three, also liked']);
+
+  // The user likes a post that never arrived from the API: it is read from the page.
+  await change(site, 'FavoriteTweet', '501');
+  await expect(library.getByText('3 bookmarks · 4 likes · 2 in both')).toBeVisible();
+  await expect
+    .poll(() => texts(library, 'Likes'))
+    .toEqual(['Shown on the page only', 'Seen at home', 'Like two', 'Bookmark three, also liked']);
+  await expect(library.getByText('Page Author')).toBeVisible();
+  await expect(library.getByText('@page_author · Mar 1, 2024')).toBeVisible();
 
   // Each post links back to X and nowhere else.
   const links = await library

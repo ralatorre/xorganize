@@ -11,6 +11,7 @@ import { isId, isRecord } from '@/src/guards';
 import type { CaptureMessage, CaptureReply, ResponseMessage } from '@/src/messaging/protocol';
 import { MAX_ITEMS } from '@/src/messaging/protocol';
 import { extractPosts } from './extract';
+import type { CapturedPost } from './normalise';
 import { AMBIENT_TIMELINES, MUTATIONS, SOURCE_TIMELINES, type SourceKind } from './operations';
 import { SeenPosts } from './seen';
 
@@ -22,6 +23,8 @@ export interface CaptureEnvironment {
   onCaptured(source: SourceKind, counts: Counts): void;
   /** Called when the worker did not store what it was sent. Never silent. */
   onFailed(): void;
+  /** Reads the basics of a post from the page, for one that was never seen arriving. */
+  postFromPage(id: string): CapturedPost | undefined;
 }
 
 export function createCapture(environment: CaptureEnvironment) {
@@ -52,7 +55,8 @@ export function createCapture(environment: CaptureEnvironment) {
     // The request names the post only by id. The rest comes from where the
     // user saw it. Its recorded bookmark and like state predates this change
     // and may be stale, so it is left out: the source alone decides.
-    const post = seen.get(postId);
+    const remembered = seen.get(postId);
+    const post = remembered ?? environment.postFromPage(postId);
     if (!post) return;
     const content = { ...post };
     delete content.bookmarked;
@@ -62,7 +66,7 @@ export function createCapture(environment: CaptureEnvironment) {
         type: 'capture/posts',
         accountId,
         source,
-        items: [{ post: content }],
+        items: [remembered ? { post: content } : { post: content, partial: true }],
         referenced: [],
         unavailable: [],
       },

@@ -7,8 +7,10 @@ import {
   counts,
   mergePost,
   postsBySource,
+  recentKey,
   saveCapture,
   sortKey,
+  unknownKey,
   type CaptureBatch,
 } from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
@@ -37,17 +39,21 @@ beforeEach(() => {
 
 const stored = (id: string, accountId = ACCOUNT) => db.posts.get([accountId, id]);
 
-describe('sortKey', () => {
-  it('orders real indexes numerically, and provisional keys above them by time', () => {
+describe('sort keys', () => {
+  it('put unknown positions lowest, real ones in numeric order, and recent changes highest', () => {
     const keys = [
-      sortKey('9', 0),
-      sortKey('10', 0),
-      sortKey('1800000000000000000', 0),
-      sortKey(undefined, 1000),
-      sortKey(undefined, 2000),
+      unknownKey(null),
+      unknownKey(1000),
+      unknownKey(Date.UTC(2030, 0, 1)),
+      sortKey('9'),
+      sortKey('10'),
+      sortKey('1800000000000000000'),
+      recentKey(1000),
+      recentKey(2000),
     ];
 
     expect([...keys].sort()).toEqual(keys);
+    expect(new Set(keys.map((key) => key.length))).toEqual(new Set([30]));
   });
 });
 
@@ -82,7 +88,7 @@ describe('mergePost', () => {
     });
 
     expect(record.isBookmark).toBe(1);
-    expect(record.bookmarkSort).toBe(sortKey('77', 0));
+    expect(record.bookmarkSort).toBe(sortKey('77'));
     expect(record.isLike).toBe(0);
   });
 
@@ -93,7 +99,8 @@ describe('mergePost', () => {
       sortIndex: '77',
     });
     expect(likedToo.isLike).toBe(1);
-    expect(likedToo.likeSort).toBe(sortKey(undefined, 5000));
+    // When it was liked is not known, so it sorts below real positions, by the post's date.
+    expect(likedToo.likeSort).toBe(unknownKey(Date.UTC(2024, 0, 1, 12)));
 
     const noLongerLiked = mergePost(likedToo, post('1', { favorited: false }), {
       ...context,
@@ -118,7 +125,7 @@ describe('mergePost', () => {
     const first = mergePost(undefined, post('1'), { ...context, source: 'like', sortIndex: '42' });
     const again = mergePost(first, post('1', { favorited: true }), { ...context, now: 9000 });
 
-    expect(again.likeSort).toBe(sortKey('42', 0));
+    expect(again.likeSort).toBe(sortKey('42'));
   });
 
   it('replaces a provisional position with the real one', () => {
@@ -130,8 +137,8 @@ describe('mergePost', () => {
       sortIndex: '42',
     });
 
-    expect(justLiked.likeSort).toBe(sortKey(undefined, 5000));
-    expect(fromTimeline.likeSort).toBe(sortKey('42', 0));
+    expect(justLiked.likeSort).toBe(recentKey(5000));
+    expect(fromTimeline.likeSort).toBe(sortKey('42'));
   });
 
   it('updates content but never moves first sight or save time forward, and keeps tags', () => {
@@ -328,5 +335,109 @@ describe('clearSource', () => {
 describe('activeAccount', () => {
   it('is undefined until something is captured', async () => {
     expect(await activeAccount(db)).toBeUndefined();
+  });
+});
+
+describe('a post read from the page', () => {
+  const context = { accountId: ACCOUNT, now: 5000 };
+  const fromPage: CapturedPost = {
+    id: '1',
+    url: 'https://x.com/example_user/status/1',
+    text: 'Text as shown on the page',
+    createdAt: null,
+    author: { handle: 'example_user', name: 'Example User' },
+    media: [],
+    links: [],
+    sensitive: false,
+  };
+
+  it('is stored as partial when nothing better is known', () => {
+    const record = mergePost(undefined, fromPage, { ...context, source: 'like', partial: true });
+
+    expect(record).toMatchObject({ partial: true, isLike: 1, text: 'Text as shown on the page' });
+    expect(record.likeSort).toBe(recentKey(5000));
+  });
+
+  it('never replaces the content of a full capture, but still sets the source', () => {
+    const full = mergePost(undefined, post('1', { text: 'Full text', media: [] }), context);
+    const merged = mergePost(full, fromPage, {
+      ...context,
+      now: 9000,
+      source: 'like',
+      partial: true,
+    });
+
+    expect(merged).toMatchObject({
+      partial: false,
+      text: 'Full text',
+      createdAt: full.createdAt,
+      author: full.author,
+      isLike: 1,
+      lastSeenAt: 9000,
+    });
+  });
+
+  it('is completed by the next full capture', () => {
+    const partial = mergePost(undefined, fromPage, { ...context, source: 'like', partial: true });
+    const completed = mergePost(partial, post('1', { text: 'Full text' }), {
+      ...context,
+      now: 9000,
+      source: 'like',
+      sortIndex: '42',
+    });
+
+    expect(completed).toMatchObject({
+      partial: false,
+      text: 'Full text',
+      isLike: 1,
+      savedAt: 5000,
+    });
+    expect(completed.likeSort).toBe(sortKey('42'));
+  });
+
+  it('is replaced by a later partial capture of the same post', () => {
+    const first = mergePost(undefined, fromPage, { ...context, source: 'like', partial: true });
+    const second = mergePost(
+      first,
+      { ...fromPage, text: 'Edited' },
+      { ...context, source: 'bookmark', partial: true },
+    );
+
+    expect(second).toMatchObject({ partial: true, text: 'Edited', isLike: 1, isBookmark: 1 });
+  });
+});
+
+describe('the order of a source', () => {
+  it('is recent changes, then timeline positions, then posts known only by the API’s say-so', async () => {
+    await saveCapture(
+      db,
+      batch({
+        source: 'bookmark',
+        items: [
+          {
+            post: post('31', { favorited: true, createdAt: 'Mon Jan 01 12:00:00 +0000 2024' }),
+            sortIndex: '3',
+          },
+          {
+            post: post('32', { favorited: true, createdAt: 'Wed Jan 01 12:00:00 +0000 2025' }),
+            sortIndex: '2',
+          },
+        ],
+      }),
+    );
+    await saveCapture(
+      db,
+      batch({
+        source: 'like',
+        items: [
+          { post: post('21'), sortIndex: '200' },
+          { post: post('22'), sortIndex: '100' },
+        ],
+      }),
+    );
+    await saveCapture(db, batch({ source: 'like', items: [{ post: post('11') }] }));
+
+    const likes = await postsBySource(db, ACCOUNT, 'like', 10);
+    expect(likes.map((item) => item.id)).toEqual(['11', '21', '22', '32', '31']);
   });
 });

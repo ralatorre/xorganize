@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { normalisePost, type CapturedPost } from '@/src/capture/normalise';
 import { createCapture } from '@/src/capture/pipeline';
 import type { CaptureMessage, CaptureReply, ResponseMessage } from '@/src/messaging/protocol';
 import { isRuntimeMessage } from '@/src/messaging/protocol';
@@ -14,7 +15,13 @@ import {
 
 const VIEWER = '9000000000000000001';
 
-function setup(options: { viewerId?: string | undefined; reply?: CaptureReply | undefined } = {}) {
+function setup(
+  options: {
+    viewerId?: string | undefined;
+    reply?: CaptureReply | undefined;
+    onPage?: CapturedPost[];
+  } = {},
+) {
   const sent: CaptureMessage[] = [];
   const captured: Array<[string, { bookmarks: number; likes: number }]> = [];
   const failures: string[] = [];
@@ -29,6 +36,7 @@ function setup(options: { viewerId?: string | undefined; reply?: CaptureReply | 
     },
     onCaptured: (source, counts) => captured.push([source, counts]),
     onFailed: () => failures.push('failed'),
+    postFromPage: (id) => options.onPage?.find((post) => post.id === id),
   });
   return { capture, sent, captured, failures };
 }
@@ -231,12 +239,41 @@ describe('changes the user makes', () => {
     expect(sent).toHaveLength(1);
   });
 
-  it('does not store a post it never saw', async () => {
+  it('does not store a post it never saw and cannot find on the page', async () => {
     const { capture, sent } = setup();
 
     await capture(mutation('CreateBookmark', '999'));
 
     expect(sent).toEqual([]);
+  });
+
+  it('falls back to what the page shows for a post it never saw, marked as partial', async () => {
+    const onPage = normalisePost(rawPost({ id: '999', text: 'As shown on the page' }))!;
+    const { capture, sent } = setup({ onPage: [onPage] });
+
+    await capture(mutation('FavoriteTweet', '999'));
+
+    const message = sent[0] as Extract<CaptureMessage, { type: 'capture/posts' }>;
+    expect(message.source).toBe('like');
+    expect(message.items).toHaveLength(1);
+    expect(message.items[0]).toMatchObject({
+      partial: true,
+      post: { text: 'As shown on the page' },
+    });
+    expect(isRuntimeMessage(message)).toBe(true);
+  });
+
+  it('prefers what it saw arrive over what the page shows', async () => {
+    const onPage = normalisePost(rawPost({ id: '401', text: 'From the page' }))!;
+    const { capture, sent } = setup({ onPage: [onPage] });
+    const seen = rawPost({ id: '401', text: 'From the API' });
+    await capture(response('HomeTimeline', homeTimeline([postEntry(seen, '1')])));
+
+    await capture(mutation('FavoriteTweet', '401'));
+
+    const message = sent[0] as Extract<CaptureMessage, { type: 'capture/posts' }>;
+    expect(message.items[0]?.post.text).toBe('From the API');
+    expect(message.items[0]).not.toHaveProperty('partial');
   });
 
   it.each([

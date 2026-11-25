@@ -99,7 +99,7 @@ export interface CapturePostsMessage {
   accountId: string;
   /** The timeline the items belong to. */
   source: SourceKind;
-  items: Array<{ post: CapturedPost; sortIndex?: string }>;
+  items: Array<{ post: CapturedPost; sortIndex?: string; partial?: boolean }>;
   /** Posts the items refer to, such as quoted posts. */
   referenced: CapturedPost[];
   /** Ids of posts X reports as no longer available. */
@@ -144,7 +144,8 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
           isRecord(item) &&
           isCapturedPost(item.post) &&
           (item.sortIndex === undefined ||
-            (typeof item.sortIndex === 'string' && SORT_INDEX.test(item.sortIndex))),
+            (typeof item.sortIndex === 'string' && SORT_INDEX.test(item.sortIndex))) &&
+          (item.partial === undefined || typeof item.partial === 'boolean'),
       ) &&
       Array.isArray(referenced) &&
       referenced.length <= MAX_ITEMS * 2 &&
