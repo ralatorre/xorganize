@@ -5,6 +5,8 @@
  *   content script, over the private channel in ./bridge.ts.
  * - Runtime messages travel over `runtime.sendMessage` from the isolated
  *   content script to the background worker.
+ * - Port messages travel from the worker to content scripts over a
+ *   `runtime.connect` port, to keep tag state on the page current.
  *
  * Everything received is validated before use, whichever side it comes from.
  */
@@ -12,8 +14,9 @@
 import { DIAGNOSTICS } from '@/src/build';
 import { isCapturedPost, type CapturedPost } from '@/src/capture/normalise';
 import type { SourceKind } from '@/src/capture/operations';
-import type { Counts } from '@/src/db/types';
+import type { Counts, TagSuggestion, TagSummary } from '@/src/db/types';
 import { isId, isRecord } from '@/src/guards';
+import { MAX_TAG_NAME, parseTagName } from '@/src/tags/names';
 
 export { isRecord };
 
@@ -119,9 +122,65 @@ export type CaptureMessage = CapturePostsMessage | CaptureClearMessage;
 /** The worker's answer to a capture message: the account's totals afterwards. */
 export type CaptureReply = { ok: true; counts: Counts } | { ok: false };
 
-export type RuntimeMessage = ContentReadyMessage | CaptureMessage | DiagnosticsMessage;
+/** The tags on posts that are on screen. */
+export interface TagsForPostsMessage {
+  type: 'tags/for-posts';
+  accountId: string;
+  postIds: string[];
+}
+
+/** Tags matching what the user has typed, and the most recently used ones. */
+export interface TagsSuggestMessage {
+  type: 'tags/suggest';
+  accountId: string;
+  query: string;
+  limit: number;
+}
+
+/** Adds and removes tags on one post. */
+export interface TagsSetMessage {
+  type: 'tags/set';
+  accountId: string;
+  postId: string;
+  /** Tag names, created as needed. */
+  add: string[];
+  /** Tag ids. */
+  remove: string[];
+  /** The post, from what the page loaded, in case it is not stored yet. */
+  post?: CapturedPost;
+  /** True when `post` was read from the page rather than the API. */
+  partial?: boolean;
+}
+
+export type TagMessage = TagsForPostsMessage | TagsSuggestMessage | TagsSetMessage;
+
+export type TagsForPostsReply =
+  { ok: true; posts: Array<{ postId: string; tags: TagSummary[] }> } | { ok: false };
+export type TagsSuggestReply =
+  { ok: true; suggestions: TagSuggestion[]; recent: TagSummary[] } | { ok: false };
+export type TagsSetReply = { ok: true; tags: TagSummary[] } | { ok: false };
+
+/** Name of the port content scripts open to hear about tag changes. */
+export const TAGS_PORT = 'tags';
+
+/** Sent to every open tags port after a post's tags change. */
+export interface TagsChangedMessage {
+  type: 'tags/changed';
+  accountId: string;
+  postId: string;
+  tags: TagSummary[];
+}
+
+export type RuntimeMessage = ContentReadyMessage | CaptureMessage | TagMessage | DiagnosticsMessage;
 
 export const MAX_ITEMS = 200;
+/** Posts per tags/for-posts request: more than a screen holds. */
+export const MAX_TAG_POSTS = 100;
+/** Suggestions per tags/suggest request. */
+export const MAX_SUGGESTIONS = 20;
+/** Tags added or removed in one tags/set request. */
+export const MAX_TAG_CHANGES = 20;
+const TAG_ID = /^[A-Za-z0-9-]{1,64}$/;
 const SORT_INDEX = /^\d{1,30}$/;
 
 const isSource = (value: unknown): value is SourceKind => value === 'bookmark' || value === 'like';
@@ -155,6 +214,13 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
       unavailable.every(isId)
     );
   }
+  if (
+    value.type === 'tags/for-posts' ||
+    value.type === 'tags/suggest' ||
+    value.type === 'tags/set'
+  ) {
+    return isTagMessage(value);
+  }
   // Production neither sends nor accepts diagnostics messages.
   if (!DIAGNOSTICS) return false;
   return (
@@ -165,4 +231,37 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
 
 function isOptionalText(value: unknown, max: number): boolean {
   return value === undefined || (typeof value === 'string' && value.length <= max);
+}
+
+export function isTagId(value: unknown): value is string {
+  return typeof value === 'string' && TAG_ID.test(value);
+}
+
+function isTagMessage(value: Record<string, unknown>): boolean {
+  if (!isId(value.accountId)) return false;
+  if (value.type === 'tags/for-posts') {
+    const { postIds } = value;
+    return Array.isArray(postIds) && postIds.length <= MAX_TAG_POSTS && postIds.every(isId);
+  }
+  if (value.type === 'tags/suggest') {
+    return (
+      typeof value.query === 'string' &&
+      value.query.length <= MAX_TAG_NAME * 4 &&
+      Number.isInteger(value.limit) &&
+      (value.limit as number) >= 1 &&
+      (value.limit as number) <= MAX_SUGGESTIONS
+    );
+  }
+  const { add, remove, post } = value;
+  return (
+    isId(value.postId) &&
+    Array.isArray(add) &&
+    add.length <= MAX_TAG_CHANGES &&
+    add.every((name) => typeof name === 'string' && parseTagName(name).ok) &&
+    Array.isArray(remove) &&
+    remove.length <= MAX_TAG_CHANGES &&
+    remove.every(isTagId) &&
+    (post === undefined || (isCapturedPost(post) && post.id === value.postId)) &&
+    (value.partial === undefined || typeof value.partial === 'boolean')
+  );
 }
