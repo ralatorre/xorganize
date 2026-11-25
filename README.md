@@ -17,6 +17,7 @@ It works with a free X account. It does not use or depend on X's paid bookmark f
 
 - [UX design](docs/DESIGN.md): surfaces, flows, wireframes.
 - [Technical spec](docs/SPEC.md): architecture, data model, capture pipeline, milestones.
+- [Contributing](CONTRIBUTING.md): privacy rules, code quality standards, pull requests.
 
 ## Development
 
