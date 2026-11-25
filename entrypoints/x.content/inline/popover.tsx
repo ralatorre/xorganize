@@ -24,8 +24,9 @@ import { placePopover } from '@/src/inline/position';
 import type { TagState } from '@/src/inline/tag-state';
 import type { TagEdit } from '@/src/inline/tagger';
 import { MAX_TAG_NAME } from '@/src/tags/names';
+import { tagColour } from '@/src/tags/palette';
 import { createShadowHost } from './shadow';
-import { POPOVER_STYLES, dotColour } from './styles';
+import { POPOVER_STYLES } from './styles';
 import type { TagButton } from './tag-button';
 
 /** How long typing must pause before suggestions are asked for. */
@@ -304,5 +305,5 @@ function RowContent({ row }: { row: Row }) {
 }
 
 function Dot({ colour }: { colour: number }) {
-  return <span class="dot" style={{ background: dotColour(colour) }} aria-hidden="true" />;
+  return <span class="dot" style={{ background: tagColour(colour) }} aria-hidden="true" />;
 }

@@ -6,11 +6,11 @@ import {
   clearSource,
   counts,
   mergePost,
-  postsBySource,
   readSettings,
   recentKey,
   saveCapture,
   sortKey,
+  sourceIds,
   unknownKey,
   updateSettings,
   type CaptureBatch,
@@ -262,13 +262,12 @@ describe('saveCapture', () => {
     );
     await saveCapture(db, batch({ source: 'bookmark', items: [{ post: post('7') }] }));
 
-    const ordered = await postsBySource(db, ACCOUNT, 'bookmark', 10);
-    expect(ordered.map((item) => item.id)).toEqual(['7', '2', '1']);
+    expect(await sourceIds(db, ACCOUNT, 'bookmark')).toEqual(['7', '2', '1']);
   });
 });
 
-describe('postsBySource', () => {
-  it('returns one source in timeline order, limited', async () => {
+describe('sourceIds', () => {
+  it('returns one source in timeline order', async () => {
     await saveCapture(
       db,
       batch({
@@ -285,8 +284,9 @@ describe('postsBySource', () => {
       batch({ source: 'bookmark', items: [{ post: post('99'), sortIndex: '1' }] }),
     );
 
-    const likes = await postsBySource(db, ACCOUNT, 'like', 2);
-    expect(likes.map((item) => item.id)).toEqual(['11', '12']);
+    expect(await sourceIds(db, ACCOUNT, 'like')).toEqual(['11', '12', '13']);
+    expect(await sourceIds(db, ACCOUNT, 'bookmark')).toEqual(['99']);
+    expect(await sourceIds(db, OTHER, 'like')).toEqual([]);
   });
 });
 
@@ -439,8 +439,7 @@ describe('the order of a source', () => {
     );
     await saveCapture(db, batch({ source: 'like', items: [{ post: post('11') }] }));
 
-    const likes = await postsBySource(db, ACCOUNT, 'like', 10);
-    expect(likes.map((item) => item.id)).toEqual(['11', '21', '22', '32', '31']);
+    expect(await sourceIds(db, ACCOUNT, 'like')).toEqual(['11', '21', '22', '32', '31']);
   });
 });
 

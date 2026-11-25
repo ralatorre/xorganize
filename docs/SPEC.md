@@ -27,7 +27,7 @@ The extension makes no network requests of its own, loads no remote code, and ha
 | Storage | IndexedDB through Dexie 4 | Compound indexes, migrations, cross-context live queries. |
 | Validation | Hand-written type guards, with size caps | Enough for the messages that exist today. A schema library (Valibot) is to be added when importing files needs it (M4). |
 | Search | MiniSearch | In-memory full-text index, sufficient at the target scale. |
-| List virtualisation | `@tanstack/virtual-core` | |
+| List virtualisation | `@tanstack/virtual-core` | Renders only the rows near the viewport. No dependencies of its own; reads `navigator` only to detect iOS, and makes no network, storage or messaging calls. |
 | Tests | Vitest (unit), Playwright (end to end against a mock site) | |
 | Tooling | pnpm, ESLint, Prettier | |
 
@@ -336,6 +336,8 @@ The record is flagged `partial: true`. It is upgraded to a full record the next 
 
 The logged-in account's numeric ID is needed to keep libraries separate and to apply the Likes ownership check. Source, to verify: the `twid` cookie, read through `document.cookie` in the isolated world, in the form `u%3D<id>`. Only the numeric ID is extracted and kept. If it cannot be determined, capture is paused and the banner says so; posts are never stored against an unknown account.
 
+The library shows the account that most recently stored a post, by capture or by tagging (`rememberAccount` in `repo.ts`).
+
 ### 7.8 Auto-scroll
 
 Runs in the content script, only on a source timeline page, and only after the user presses the button.
@@ -495,9 +497,10 @@ The worker checks `sender.id`, that the message comes from the top frame, and th
 ## 11. Library application
 
 - **Data access.** Opens Dexie directly. Lists are driven by live queries, so changes made on x.com appear without a reload.
-- **Filtering.** Source and single-tag filters use the compound indexes. Multi-tag filters fetch the post ID set for each tag from `postTags` and intersect (Match All) or union (Match Any) in memory.
-- **Search.** On open, a MiniSearch index is built in a web worker from `text`, `author.handle` and `author.name` for the current account. It is updated incrementally from live-query changes. The query parser lifts `#tag` and `@handle` tokens out as structured filters and passes the rest to MiniSearch with prefix matching on the final term. Expected cost at 50,000 posts: an index build of a second or two, off the main thread, with the unfiltered list shown immediately.
-- **Rendering.** A virtualised list with measured row heights. Avatars and thumbnails are loaded lazily from X's image server without cookies or a referrer (6.2). These image loads are the only network activity. They are issued by the browser for `<img>` elements, not by extension code, and can be turned off in settings. Photos are requested at X's `small` size. Up to four thumbnails are shown per post.
+- **Filtering** (built, `src/library/browse.ts` and `select.ts`). The page lists post IDs, not posts. Each source's IDs come from its index alone: bookmarks and likes from their sort indexes, tagged posts from `hasTags`. "All" is their union, so posts stored only because a saved post quotes them are never listed. "Tagged only" is tagged with neither source, "Untagged" has a source and no tag. Each selected tag's posts come from the `postTags` index, and are intersected (Match All) or united (Match Any) in memory. Tag counts come from one pass over the same index.
+- **Order** (built). "Saved" is the timeline's own order for Bookmarks and Likes, and the order posts entered the library (`savedAt`) otherwise. "Post date" sorts by post ID: X's IDs grow with time, so no date index is needed. "Author" reads handles from the `author.handle` index and sorts them ignoring case, each author's posts newest first.
+- **Search** (to be built). On open, a MiniSearch index is built in a web worker from `text`, `author.handle` and `author.name` for the current account. It is updated incrementally from live-query changes. The query parser lifts `#tag` and `@handle` tokens out as structured filters and passes the rest to MiniSearch with prefix matching on the final term. Expected cost at 50,000 posts: an index build of a second or two, off the main thread, with the unfiltered list shown immediately.
+- **Rendering** (built). A list that scrolls with the page and renders only the cards near the viewport, with measured heights. Post contents, tags and quoted posts are read only for those cards, a page of 25 at a time, so memory does not grow with the library. Long text is cut to four lines with Show more. Avatars and thumbnails are loaded lazily from X's image server without cookies or a referrer (6.2). These image loads are the only network activity. They are issued by the browser for `<img>` elements, not by extension code, and can be turned off in settings. Photos are requested at X's `small` size. Up to four thumbnails are shown per post.
 - **Sharing code.** The side panel imports the same app with a `compact` flag. The tag popover and tag chip components are shared with the injected UI.
 
 ## 12. Import and export
@@ -622,8 +625,8 @@ The repository is public, so the following never get committed:
 | --- | --- | --- |
 | M0 Skeleton | WXT project, both content scripts, service worker, empty library page, CI. | The extension loads and CI is green. |
 | M1 Capture | Interceptor, bridge, extraction, normalisation, database, account detection, capture banner without auto-scroll, for both the Bookmarks and Likes timelines. Verify every assumption in section 18. | Scrolling the Bookmarks page and the Likes tab fills the database, confirmed against a real free account. |
-| M2 Tagging | Tag button, popover, seen cache, DOM fallback, tag messages. **Built**, to be confirmed against a real account. | A post can be tagged from any timeline and the state survives a reload. |
-| M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. Avatars and thumbnails were brought forward and are done. | A tagged post can be found by tag and by text. |
+| M2 Tagging | Tag button, popover, seen cache, DOM fallback, tag messages. **Built.** Confirmed against a real account on 2026-11-25, except Alt+T with `j`/`k` focus. | A post can be tagged from any timeline and the state survives a reload. |
+| M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. Avatars and thumbnails were brought forward and are done. **Browsing built**: sources, tag sidebar with groups, tag filters, sort, tag chips and quoted posts on cards, virtualised list. Search and tag management to follow. | A tagged post can be found by tag and by text. |
 | M4 Export | JSON and CSV export for the whole library and the current view, import with merge and replace, backup reminder, delete all. | Export then import into a clean profile reproduces the library, and a single tag can be exported to CSV. |
 | M5 Live capture | Bookmark and like mutations, tag prompt toast, auto-scroll. | Bookmarking or liking a post anywhere adds it without visiting the Bookmarks or Likes page. |
 | M6 Release | Side panel, popup, settings, welcome page, bulk actions, accessibility pass, Firefox build, store listing. | Published to the Chrome Web Store and Firefox Add-ons. |

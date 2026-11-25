@@ -163,15 +163,16 @@ Full tab layout:
 
 Sidebar:
 
-- **Sources** are mutually exclusive quick filters. "Untagged" is the inbox for triage.
-- **Tags** are listed with counts. Click to filter. `Ctrl`/`Cmd`+click to add a second tag to the filter. The context menu offers Rename, Change colour, Merge into another tag, and Delete.
+- **Sources** are mutually exclusive quick filters. "All" is every bookmarked, liked or tagged post. "Tagged only" is tagged but neither bookmarked nor liked. "Untagged" is bookmarked or liked with no tag: the inbox for triage. A source and tags combine.
+- **Tags** are listed by name with counts, groups among them in the same order. Click to show only that tag; click it again to clear it. `Ctrl`/`Cmd`+click adds a tag to the filter, or takes it out. A group can be collapsed. The context menu offers Rename, Change colour, Merge into another tag, and Delete.
 - Deleting a tag removes it from posts but never deletes posts. It asks for confirmation and states how many posts are affected.
 
 Main column:
 
 - **Search** matches post text, author name and handle. `#name` filters by tag and `@handle` by author, so the whole query can be typed. Results update as the user types.
-- **Match All / Any** switches between requiring every selected tag and any of them.
-- **Sort**: saved order (newest first, the default), post date, author.
+- **Match All / Any** switches between requiring every selected tag and any of them. It appears once two tags are selected.
+- **Sort**: saved order (newest first, the default; for Bookmarks and Likes, X's own order), post date (newest first), author (A to Z).
+- **No posts match** offers Clear filters, which returns to All with no tags and keeps the sort.
 - **Post card** shows avatar, name, handle, date, text, media thumbnails, a quoted post if present, and tag chips. The `[+]` chip opens the same tag popover as the inline button. "Open on X" opens the original in a new tab. The `⋯` menu offers Copy link and Remove from library.
 - **Export view**, in the menu beside Sort, exports exactly the posts in the current filter as JSON or CSV (see 5.6).
 - A post that has been unbookmarked or deleted on X is still shown, with a muted "No longer bookmarked" or "Unavailable on X" label.

@@ -67,6 +67,8 @@ test('library page renders its empty state', async ({ context, extensionId }) =>
   await expect(page.getByRole('heading', { level: 1, name: 'xorganize' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Your library is empty' })).toBeVisible();
   expect(violations).toEqual([]);
+  // The page's own text size, not the smaller one browsers give extension pages.
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontSize)).toBe('16px');
 });
 
 test('the browser blocks network requests from extension pages', async ({

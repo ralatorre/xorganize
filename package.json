@@ -25,6 +25,7 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@tanstack/virtual-core": "3.19.11",
     "dexie": "4.4.7",
     "preact": "11.2.0"
   },

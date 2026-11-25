@@ -1,27 +1,66 @@
-import type { StoredPost } from '@/src/db/types';
+import { useRef } from 'preact/hooks';
+import type { AccountId, PostId } from '@/src/db/types';
+import { usePostViews, type LoadPosts } from '../use-post-views';
+import { useWindowVirtualizer } from '../use-window-virtualizer';
 import { PostCard } from './PostCard';
 
-/** One source's posts under a heading with its total. */
+/** A guess at a card's height before it is measured. */
+export const ESTIMATED_CARD_PX = 160;
+/** Cards rendered beyond each edge of the viewport. */
+export const OVERSCAN = 6;
+
+/** The matching posts. Only cards near the viewport are rendered and read. */
 export function PostList(props: {
-  title: string;
-  total: number;
-  posts: StoredPost[];
+  accountId: AccountId;
+  ids: readonly PostId[];
+  load: LoadPosts;
   images: boolean;
 }) {
-  const id = `list-${props.title.toLowerCase()}`;
+  const { ids } = props;
+  const list = useRef<HTMLOListElement>(null);
+  const virtualizer = useWindowVirtualizer(list, {
+    count: ids.length,
+    estimateSize: () => ESTIMATED_CARD_PX,
+    getItemKey: (index) => ids[index] ?? index,
+    overscan: OVERSCAN,
+  });
+  const rows = virtualizer.getVirtualItems();
+  const views = usePostViews(
+    props.load,
+    props.accountId,
+    ids,
+    rows[0]?.index ?? 0,
+    rows[rows.length - 1]?.index ?? -1,
+  );
+  const offset = virtualizer.options.scrollMargin;
+
   return (
-    <section class="posts" aria-labelledby={id}>
-      <h2 id={id}>
-        {props.title} <span class="posts__count">{props.total.toLocaleString()}</span>
-      </h2>
-      {props.posts.length === 0 ? <p class="posts__none">None captured yet.</p> : null}
-      <ol>
-        {props.posts.map((post) => (
-          <li key={post.id}>
-            <PostCard post={post} images={props.images} />
+    <ol
+      ref={list}
+      class="posts"
+      aria-label="Posts"
+      style={{ height: `${virtualizer.getTotalSize()}px` }}
+    >
+      {rows.map((row) => {
+        const view = views.get(ids[row.index]!);
+        return (
+          <li
+            key={row.key}
+            data-index={row.index}
+            ref={virtualizer.measureElement}
+            class="posts__row"
+            aria-posinset={row.index + 1}
+            aria-setsize={ids.length}
+            style={{ transform: `translateY(${row.start - offset}px)` }}
+          >
+            {view ? (
+              <PostCard view={view} images={props.images} />
+            ) : (
+              <div class="post post--loading" aria-busy="true" />
+            )}
           </li>
-        ))}
-      </ol>
-    </section>
+        );
+      })}
+    </ol>
   );
 }

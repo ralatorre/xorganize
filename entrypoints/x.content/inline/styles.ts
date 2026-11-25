@@ -39,26 +39,6 @@ const TOKENS = `
   }
 `;
 
-/** Colours for tag dots, by palette index (src/tags/palette.ts). */
-export const TAG_DOTS = [
-  '#1d9bf0',
-  '#00ba7c',
-  '#f91880',
-  '#ff7a00',
-  '#7856ff',
-  '#ffd400',
-  '#00a8a8',
-  '#f4212e',
-  '#a0632d',
-  '#5c6bc0',
-  '#8bc34a',
-  '#8b98a5',
-] as const;
-
-export function dotColour(index: number): string {
-  return TAG_DOTS[index] ?? 'transparent';
-}
-
 export const BUTTON_STYLES = `
   :host { all: initial; display: flex; align-items: center; }
   ${TOKENS}
