@@ -25,7 +25,7 @@ The extension makes no network requests of its own, loads no remote code, and ha
 | UI | Preact + Signals | Small bundle, which matters for a content script injected on every x.com page. |
 | Styling | Plain CSS with custom properties, in a shadow root | No runtime styling cost, full isolation from X's CSS. |
 | Storage | IndexedDB through Dexie 4 | Compound indexes, migrations, cross-context live queries. |
-| Validation | Valibot | Small, tree-shakeable schema validation for untrusted input. |
+| Validation | Hand-written type guards, with size caps | Enough for the messages that exist today. A schema library (Valibot) is to be added when importing files needs it (M4). |
 | Search | MiniSearch | In-memory full-text index, sufficient at the target scale. |
 | List virtualisation | `@tanstack/virtual-core` | |
 | Tests | Vitest (unit), Playwright (end to end against a mock site) | |
@@ -201,7 +201,19 @@ Rules for this file:
 - It must never throw into the page and never change what the page receives. All work is inside `try`/`catch`, and the original return values are passed through untouched.
 - It never reads or forwards request headers. Authorisation and CSRF headers never leave the page context.
 - It stays dependency-free and under roughly 150 lines, so that it can be audited at a glance.
-- It leaves nothing behind that the page can observe: no globals, no DOM changes, no messages. One limit is unavoidable and stated plainly: reading responses means wrapping two of the page's own functions, and a site that goes looking can detect that a function has been wrapped. M1 will make the wrappers as close to the originals as it can, and will document what remains detectable.
+- It leaves nothing behind that the page can observe: no globals, no DOM changes, no messages, no unhandled rejections. A browser test loads a page that records all of these and asserts it sees nothing, and that every response and error reaches the page unchanged.
+- The wrappers are proxies of the native functions, installed with the original property flags. They therefore keep the original `name` and `length`, and print as native code. Everything they rely on (`Reflect.apply`, `Promise.prototype.then`, the response and request accessors, `addEventListener`) is captured before any page script runs, so a page that later replaces those built-ins neither breaks the wrappers nor sees them at work.
+
+What remains detectable, stated plainly, because reading responses requires wrapping page functions at all:
+
+| Trace | Detail |
+| --- | --- |
+| Printed source | A wrapped function prints as `function () { [native code] }`, without its name. A site that compares against the exact native string can tell. |
+| Identity | `window.fetch` is no longer the same object as the `fetch` of a freshly created iframe. |
+| Stack traces | An error thrown synchronously inside a wrapped call has one extra frame, which names the extension's script URL and so its ID. |
+| Built-ins used during a call | A few ordinary methods (`URL` parsing, string methods) are called while a request is examined. A page that replaces those could notice the calls. |
+
+None of these is exposed by ordinary site code; each needs the site to look for it deliberately. They are accepted, and revisited if X is seen to act on them.
 
 ### 7.2 Bridge (ISOLATED world)
 
@@ -288,6 +300,8 @@ Shape changes must be visible, not silent.
 
 ### 7.6 Fallback from the DOM
 
+**Built** (`src/dom/post-from-page.ts`), for bookmark and like requests. Tagging will use it too.
+
 When the user tags a post that is missing from the seen cache (for example after the service worker and page have been open for a long time), a minimal record is built from the page:
 
 | Data | Selector (to verify) |
@@ -298,7 +312,7 @@ When the user tags a post that is missing from the seen cache (for example after
 | Text | `[data-testid="tweetText"]` |
 | Display name | `[data-testid="User-Name"]` |
 
-The record is flagged `partial: true`. It is upgraded to a full record the next time the post passes through the interceptor.
+The record is flagged `partial: true`. It is upgraded to a full record the next time the post passes through the interceptor. A partial record never replaces the content of a full one: if the post is already stored in full, only its source changes.
 
 ### 7.7 Identifying the account
 
@@ -313,6 +327,8 @@ Runs in the content script, only on a source timeline page, and only after the u
 - Never issues requests of its own. It only scrolls.
 
 ## 8. Injected UI
+
+**Built so far:** a status line (`entrypoints/x.content/banner.ts`). After each captured page of bookmarks or likes it shows the account's running total for that source, at the bottom centre of the window, and hides when the address changes. It lives in a closed shadow root with a constructed stylesheet, takes no input (`pointer-events: none`), and is given its text with `textContent`. It is the only thing the extension adds to the page, and is visible to the page by design. The rest of this section describes what is still to come.
 
 - **Mounting.** One shadow root per injected control, with styles adopted through a shared constructable stylesheet. A single `MutationObserver` on the primary column finds new `article[data-testid="tweet"]` elements and mounts a tag button into the action bar (the `[role="group"]` row, before the element containing `[data-testid="bookmark"]` or `[data-testid="removeBookmark"]`). The observer callback is batched with `requestAnimationFrame`.
 - **Recycling.** X virtualises its timeline and reuses DOM nodes. Each mount is tagged with the post ID it was created for and is re-bound when that changes.
@@ -399,7 +415,9 @@ interface Meta {
 Notes:
 
 - Posts quoted by a saved post are stored with `isBookmark`, `isLike` and `hasTags` all `0`. The library hides such records unless they are referenced by a visible post. A cleanup pass removes orphans.
-- Sort indexes are stored as fixed-width, zero-padded strings so that string comparison matches numeric order.
+- Sort indexes are stored as fixed-width, zero-padded strings so that string comparison matches numeric order. Two other kinds of key cover posts with no index yet. A post the user has just bookmarked or liked gets a key built from the time, prefixed with `~`, which sorts above every real index: newest first, at the top. A post known to be bookmarked or liked only because the API said so when it appeared in another timeline gets a key built from the post's own date, prefixed with `!`, which sorts below every real index: when it was bookmarked or liked is not known, so it must not be shown as if it were recent. Either is replaced by the real index when the timeline supplies it.
+- Sources follow two signals. A post arriving through a bookmarks or likes timeline, or through a bookmark or like request, gets that source. For the other source, the post's own `legacy.bookmarked` and `legacy.favorited` fields are followed when present, so a post seen in the bookmarks timeline that is also liked is recorded as both, and one that has since been unliked elsewhere loses the like.
+- When a source is removed and the post has no other source and no tags, the post is deleted. The "keep posts" setting (DESIGN 4.7) will make this configurable.
 - Tag use counts are computed with a count on the `postTags` index, not stored, so they cannot drift.
 
 ### 9.2 Dexie schema
@@ -431,12 +449,11 @@ Content scripts talk to the service worker over `runtime.sendMessage` for reques
 
 | Message | Direction | Purpose |
 | --- | --- | --- |
-| `posts/upsert` | content → worker | Store posts from a source timeline or mutation. Payload capped at 200 posts. |
-| `posts/clear-source` | content → worker | A bookmark or like was removed. |
+| `capture/posts` | content → worker | Store posts from a bookmarks or likes timeline, or one the user just bookmarked or liked, with referenced posts and the IDs of unavailable ones. Capped at 200 items. The reply carries the account's new totals. |
+| `capture/clear` | content → worker | A bookmark or like was removed. The reply carries the account's new totals. |
 | `tags/for-posts` | content → worker | Tags for a batch of visible post IDs. |
 | `tags/suggest` | content → worker | Autocomplete: prefix, limit. |
 | `tags/set` | content → worker | Add or remove tags on one post; creates tags as needed; includes the post record when it is not yet stored. |
-| `capture/status` | content → worker | Counts and completion state for the banner. |
 | `health/report` | content → worker | `capture-degraded` or `inline-ui-degraded`. |
 | `tags/changed` | worker → content (port) | Push updates for subscribed post IDs. |
 | `settings/changed` | worker → content (port) | Push settings updates. |
@@ -549,7 +566,8 @@ CI never logs in to X and holds no X credentials.
 ## 15. Build, CI and release
 
 - **Development environment:** every command runs inside a Podman container through `container/run`. The container sees only the project directory, has no network unless `--net` is passed (needed only to install dependencies), keeps `node_modules` in a volume, and cannot read `.git` or modify `container/`. Tool versions are pinned exactly in `package.json`, and the image is built from them.
-- **Scripts:** `dev`, `dev:firefox`, `build`, `build:firefox`, `zip`, `typecheck`, `lint`, `test`, `test:e2e`, and `check`, which runs all of the verification steps in order.
+- **Using the extension by hand:** `container/browse` runs Chromium with the built extension in a second container and shows it in a tab of the maintainer's own browser, through a viewer on a `127.0.0.1` port with a one-time password per session. That container has network access, sees only the built extension (read-only), its own profile volume and a downloads folder, keeps Chromium's sandbox on, and starts the browser with no automation flags. The profile volume, which holds any login, is mounted by no other command.
+- **Scripts:** `dev`, `dev:firefox`, `build`, `build:firefox`, `build:diagnostics`, `zip`, `typecheck`, `lint`, `test`, `test:e2e`, and `check`, which runs all of the verification steps in order.
 - **CI (GitHub Actions):** on every pull request and push to `main`, run `check` in the same container as local development: typecheck, lint, unit tests, a build for both browsers, and the end-to-end suite on Chromium. Run a secret scanner (gitleaks) over the history. Actions are pinned to commit hashes.
 - **Releases:** a version tag builds both zips and attaches them to a GitHub release. Store submission is manual at first.
 - **Versioning:** semantic versioning. The changelog flags any release that includes a database migration.
@@ -585,6 +603,8 @@ Later candidates: Markdown export, optional encrypted sync, saved searches, Fire
 
 Each of these is from observed behaviour and has not been confirmed for this spec.
 
+**How they are verified.** A separate diagnostics build (`pnpm build:diagnostics`, loaded with `container/browse --diagnostics`) observes every GraphQL response on x.com and records only its structure: key paths, value types, counts, the values of a few schema keys such as `__typename` when they look like identifiers, and entry-ID patterns reduced to known words and placeholders. It also records how many elements each planned selector matches and whether the account cookie has the expected format. It never records post text, handles, IDs, cookies or tokens; unit and browser tests feed it marked fixture data and assert none of it reaches the report. The report is saved from the library page as a JSON file, which the maintainer can read in full before sharing. The diagnostics code is removed from production builds at build time, and a test checks that.
+
 1. The web client calls `/i/api/graphql/<id>/<OperationName>` and the operation names in 7.3 are current.
 2. Which of `fetch` and `XMLHttpRequest` the client uses for these calls. The interceptor wraps both regardless.
 3. A MAIN-world script declared at `document_start` runs before the client captures references to `fetch` and `XMLHttpRequest`.
@@ -597,3 +617,23 @@ Each of these is from observed behaviour and has not been confirmed for this spe
 10. Firefox behaviour for MAIN-world content scripts and the fallback when no side panel is available. In particular, whether both content scripts start before any page script there, which the private channel's handshake (7.2) depends on. This is tested for Chromium only.
 11. Whether the library can be evicted under storage pressure without `unlimitedStorage`, and whether `navigator.storage.persist()` prevents it (6.1).
 12. How closely the `fetch` and `XMLHttpRequest` wrappers can be made to match the originals, and what remains detectable (7.1).
+
+### 18.1 Results so far
+
+From a first diagnostics run against a real free account on 2026-11-25, in Chromium.
+
+| # | Result |
+| --- | --- |
+| 1 | **Confirmed.** All calls go to `https://x.com/i/api/graphql/<id>/<OperationName>`. `Bookmarks`, `Likes` and `HomeTimeline` exist under those names. |
+| 2 | **Confirmed.** Every observed call used `XMLHttpRequest`, with `GET` for timelines. |
+| 3 | **Confirmed.** The interceptor saw the client's calls, so it is installed before the client takes its references. |
+| 4 | **Partly.** Entries carry `entryId` and `sortIndex`. A response holds post entries followed by a top cursor and a bottom cursor. Ordering of post entries still to be measured. |
+| 5 | **Confirmed, with corrections.** The author's handle and name are at `core.user_results.result.core.*` and the avatar at `avatar.image_url`; the older `legacy.*` locations were absent. Text, long-form text, dates, language, media, links and quoted posts are where 7.4 expects. `TweetWithVisibilityResults` wraps a post under `.tweet`. Timeline roots: `data.bookmark_timeline_v2.timeline`, `data.user.result.timeline.timeline`, `data.home.home_timeline_urt`. |
+| 6 | **Confirmed** (second run). `CreateBookmark`, `DeleteBookmark`, `FavoriteTweet` and `UnfavoriteTweet` are `POST` requests whose JSON body carries the post ID at `variables.tweet_id`. |
+| 7 | **Confirmed.** The cookie is readable and matches the expected format. For `Likes`, `variables.userId` equalled the account's ID. |
+| 8 | **Confirmed.** Every selector in `src/dom/selectors.ts` matched on the home, bookmarks and likes pages. |
+| 9 | **Partly** (second run). A bookmarks list of about twenty posts was read to its end: the last page simply holds fewer posts, followed by the two cursors. Whether a long list is cut off after some number of posts is still unknown. |
+
+One finding not anticipated by the spec: every post carries `legacy.bookmarked` and `legacy.favorited`, the account's own state for that post. A post seen in any timeline therefore says whether it is bookmarked or liked, which gives a second way to keep sources accurate.
+
+The address of the bookmarks and likes pages was masked too aggressively in both runs to be read. The design no longer depends on it: the status line appears when a bookmarks or likes response is captured, not when a particular address is open.

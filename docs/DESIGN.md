@@ -113,6 +113,8 @@ When the user bookmarks a post through X's own button, a small toast appears bot
 
 ### 4.4 Capture banner
 
+> **As first built:** a single status line at the bottom centre of the window, shown when a page of bookmarks or likes has been captured ("xorganize · 240 bookmarks captured") and hidden when you move to another page. It has no controls. The fuller banner described below, with auto-scroll, comes with a later milestone.
+
 On the Bookmarks page and on the user's own Likes tab, a slim banner sits under the page header. The wording follows the page ("240 likes captured").
 
 ```

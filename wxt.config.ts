@@ -27,8 +27,10 @@ export default defineConfig({
   // Development happens inside a container, so WXT must not try to open a browser.
   webExt: { disabled: true },
 
-  manifest: ({ browser, command }) => ({
-    name: 'xorganize',
+  manifest: ({ browser, command, mode }) => ({
+    // The diagnostics build is for checking assumptions against real traffic
+    // (see docs/SPEC.md, section 18). It is never published.
+    name: mode === 'diagnostics' ? 'xorganize (diagnostics)' : 'xorganize',
     description:
       'Tag, search and export your X bookmarks and likes. Everything stays on your device.',
 

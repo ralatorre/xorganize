@@ -32,6 +32,10 @@ xorganize-export-*.json
 xorganize-export-*.csv
 *.backup.json
 
+# Reports saved from the diagnostics build (the top-level folder only)
+/diagnostics/
+xorganize-diagnostics-*.json
+
 # Local AI assistant and agent tooling
 .claude/
 CLAUDE.md

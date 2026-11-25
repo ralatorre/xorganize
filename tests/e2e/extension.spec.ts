@@ -156,7 +156,9 @@ test('the three parts connect on x.com without the page being able to tell', asy
   });
   expect(probe).toEqual({
     observed: [],
-    fetchSource: 'function fetch() { [native code] }',
+    // The interceptor's wrapper is a proxy of the native function: it prints as
+    // native code, though without the name. See docs/SPEC.md, section 7.1.
+    fetchSource: 'function () { [native code] }',
     htmlAttributes: [],
     bodyChildren: 1,
     headChildren: 2,

@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Runs inside the browse container: a virtual screen, a viewer for it, and
+# Chromium with the extension loaded. Started by container/browse.
+
+set -euo pipefail
+
+: "${VNC_PASSWORD:?container/browse sets this}"
+size="${SCREEN_SIZE:-1440x900}"
+export DISPLAY=:99
+
+cleanup() { kill $(jobs -p) 2>/dev/null || true; }
+trap cleanup EXIT
+
+Xvfb "$DISPLAY" -screen 0 "${size}x24" -nolisten tcp >/dev/null 2>&1 &
+for _ in $(seq 50); do
+  [[ -S /tmp/.X11-unix/X99 ]] && break
+  sleep 0.1
+done
+
+# The viewer is reachable only through the port container/browse publishes on
+# 127.0.0.1, and asks for the one-time password generated for this session.
+x11vnc -storepasswd "$VNC_PASSWORD" /tmp/vnc-password >/dev/null 2>&1
+x11vnc -display "$DISPLAY" -rfbauth /tmp/vnc-password -rfbport 5900 -localhost \
+  -forever -shared -noxdamage -quiet >/dev/null 2>&1 &
+websockify --web /usr/share/novnc 6080 localhost:5900 >/dev/null 2>&1 &
+
+chrome="$(ls -d /opt/playwright/chromium-*/chrome-linux*/chrome | head -1)"
+
+# A lock left behind by a session that was killed would stop the browser starting.
+rm -f /profile/Singleton*
+
+# A saved profile keeps a copy of the extension's background worker and goes on
+# running it after the files in /extension change, even across a version bump.
+# Dropping the profile's worker cache makes the browser load the current one.
+# Sites' own workers are re-registered on the next visit; logins are not here.
+rm -rf "/profile/Default/Service Worker"
+
+# Chromium's own sandbox stays on. Nothing here drives the browser: it is
+# started as an ordinary browser, with no automation flags. The browser's own
+# background requests (updates, sync, reporting) are switched off.
+"$chrome" \
+  --user-data-dir=/profile \
+  --no-first-run \
+  --no-default-browser-check \
+  --password-store=basic \
+  --disable-background-networking \
+  --disable-component-update \
+  --disable-domain-reliability \
+  --disable-sync \
+  --no-pings \
+  --disable-extensions-except=/extension \
+  --load-extension=/extension \
+  --disable-features=DisableLoadExtensionCommandLineSwitch \
+  --window-position=0,0 \
+  --window-size="${size/x/,}" \
+  "${START_URL:-https://x.com/}" >/dev/null 2>&1 &
+browser=$!
+
+# Ctrl+C in the terminal, or `podman stop`, reaches this script and not the
+# browser. Pass it on, so the browser closes cleanly and saves its profile.
+trap 'kill -TERM "$browser" 2>/dev/null || true' INT TERM
+
+# `wait` returns early when a signal arrives, so keep waiting until the
+# browser has really gone. Closing its last window ends the session too.
+while kill -0 "$browser" 2>/dev/null; do
+  wait "$browser" || true
+done

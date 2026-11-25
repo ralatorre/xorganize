@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Opens the built extension in a real browser that runs inside a container.
+# You see and use it in a tab of your own browser, over a port that is open
+# only on this machine.
+#
+#   container/browse                  the production build
+#   container/browse --diagnostics    the diagnostics build
+#   container/browse --forget         delete the saved browser profile and exit
+#
+# What the container can reach: the network, the built extension (read-only),
+# its own browser profile, and the diagnostics/ folder, where anything the
+# browser downloads is saved. It cannot see the rest of the project or the
+# machine. The profile, including any login, is kept in the podman volume
+# xorganize-browser-profile, which no other command mounts.
+
+set -euo pipefail
+
+usage() {
+  sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  cat <<'USAGE'
+
+Options:
+  --diagnostics   load the diagnostics build
+  --forget        delete the saved browser profile (logs you out) and exit
+  --port N        local port for the viewer (default 6080)
+  --url URL       page to open first (default https://x.com/)
+  --profile NAME  use a separate saved profile (podman volume NAME)
+  -h, --help      show this help
+USAGE
+}
+
+build=chrome-mv3
+build_command="pnpm build"
+port=6080
+forget=0
+profile=xorganize-browser-profile
+START_URL="https://x.com/"
+while (($#)); do
+  case "$1" in
+    --diagnostics) build=chrome-mv3-diagnostics; build_command="pnpm build:diagnostics"; shift ;;
+    --forget) forget=1; shift ;;
+    --port) port="$2"; shift 2 ;;
+    --url) START_URL="$2"; shift 2 ;;
+    --profile) profile="$2"; shift 2 ;;
+    -h | --help) usage; exit 0 ;;
+    *) echo "container/browse: unknown option $1" >&2; exit 2 ;;
+  esac
+done
+
+if ((forget)); then
+  podman volume rm "$profile" >/dev/null 2>&1 && echo "Deleted the saved browser profile." \
+    || echo "There is no saved browser profile."
+  exit 0
+fi
+
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
+if [[ ! -f "$root/.output/$build/manifest.json" ]]; then
+  echo "container/browse: no build found. Run: container/run $build_command" >&2
+  exit 1
+fi
+
+ensure_dev_image
+recipe="$(cat "$root/container/Containerfile.browse" "$root/container/browse-session" | sha256sum | cut -c1-8)"
+image="localhost/xorganize-browse:${dev_image##*:}-${recipe}"
+if ! podman image exists "$image"; then
+  podman build \
+    --build-arg "BASE=$dev_image" \
+    --tag "$image" \
+    --file "$root/container/Containerfile.browse" \
+    "$root/container" >&2
+fi
+
+mkdir -p "$root/diagnostics"
+
+# A fresh password for every session, so that nothing else on this machine,
+# including a web page in another tab, can connect to the viewer.
+VNC_PASSWORD="$(head -c 64 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | cut -c1-8)"
+export VNC_PASSWORD START_URL
+
+cat <<MESSAGE
+
+Open this address in your browser:
+
+  http://127.0.0.1:$port/vnc.html?autoconnect=1&resize=scale&password=$VNC_PASSWORD
+
+Downloads from that browser are saved in: $root/diagnostics
+Press Ctrl+C here, or close the browser window inside the viewer, to stop.
+
+MESSAGE
+
+# One session per profile. The default profile's container keeps the plain name.
+name=xorganize-browse
+[[ "$profile" == xorganize-browser-profile ]] || name="xorganize-browse-$profile"
+
+exec podman run --rm --init \
+  --name "$name" \
+  --userns=keep-id \
+  --user "$(id -u):$(id -g)" \
+  --cap-drop=all \
+  --cap-add=SYS_CHROOT \
+  --security-opt=no-new-privileges \
+  --shm-size=2g \
+  --tmpfs /home/dev:rw,mode=1777 \
+  --env HOME=/home/dev \
+  --env VNC_PASSWORD \
+  --env START_URL \
+  --volume "$root/.output/$build:/extension:ro,z" \
+  --volume "$profile:/profile:U" \
+  --volume "$root/diagnostics:/home/dev/Downloads:z" \
+  --publish "127.0.0.1:$port:6080" \
+  "$image" browse-session
