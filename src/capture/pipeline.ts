@@ -25,10 +25,12 @@ export interface CaptureEnvironment {
   onFailed(): void;
   /** Reads the basics of a post from the page, for one that was never seen arriving. */
   postFromPage(id: string): CapturedPost | undefined;
+  /** Posts seen recently. Shared with tagging, which needs the same posts. */
+  seen?: SeenPosts;
 }
 
 export function createCapture(environment: CaptureEnvironment) {
-  const seen = new SeenPosts();
+  const seen = environment.seen ?? new SeenPosts();
 
   const store = async (message: CaptureMessage, source: SourceKind) => {
     const reply = await environment.send(message).catch(() => undefined);

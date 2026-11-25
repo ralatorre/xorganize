@@ -43,3 +43,17 @@ export function postFromPage(id: string, root: ParentNode = document): CapturedP
   }
   return undefined;
 }
+
+/**
+ * The id of the post an article shows, from its own permalink: the first
+ * status link around a timestamp. Adverts have no timestamp link, so they
+ * have no id here and get no controls.
+ */
+export function postIdOf(article: Element): string | undefined {
+  for (const anchor of article.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]')) {
+    if (!anchor.querySelector('time')) continue;
+    const match = PERMALINK.exec(anchor.pathname);
+    return match && isId(match[2]) ? match[2] : undefined;
+  }
+  return undefined;
+}
