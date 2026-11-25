@@ -94,7 +94,7 @@ Behaviour:
 - `Enter` applies the highlighted suggestion. `Up` / `Down` move the highlight. `Backspace` on an empty input removes the last chip. `Esc` or a click outside closes the popover.
 - Every change is saved immediately. There is no Save button.
 - "Recent" shows the last five tags used, for one-click tagging.
-- Tag names are trimmed, lower-cased for comparison, and limited to 50 characters. A semicolon is not allowed, because it separates tags in CSV exports. The display keeps the casing of first creation.
+- Tag names are trimmed, with runs of spaces inside them made single, lower-cased for comparison, and limited to 50 characters. Invisible characters are not allowed, so two tags cannot look the same. A semicolon is not allowed, because it separates tags in CSV exports. The display keeps the casing of first creation.
 - The popover flips above the button when there is not enough space below, and is never clipped by the timeline column.
 
 Shortcut: `Alt+T` opens the popover for the post that currently has keyboard focus. It is configurable, and deliberately avoids X's own single-key shortcuts (`l`, `b`, `t`, `r` and others).

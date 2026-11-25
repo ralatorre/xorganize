@@ -5,7 +5,8 @@
  */
 
 import { DIAGNOSTICS } from '@/src/build';
-import type { Counts } from '@/src/db/types';
+import type { TagChange } from '@/src/db/tags';
+import type { Counts, TagSuggestion, TagSummary } from '@/src/db/types';
 import type { EnvironmentObservation } from '@/src/diagnostics/environment';
 import type { OperationObservation } from '@/src/diagnostics/observe';
 import { isSupportedUrl } from '@/src/hosts';
@@ -15,6 +16,11 @@ import {
   type CapturePostsMessage,
   type CaptureReply,
   type DiagnosticsMessage,
+  type TagMessage,
+  type TagsChangedMessage,
+  type TagsForPostsReply,
+  type TagsSetReply,
+  type TagsSuggestReply,
 } from '@/src/messaging/protocol';
 
 /** Where a message came from, as the browser reports it. */
@@ -30,6 +36,17 @@ export interface CaptureStore {
   clear(message: CaptureClearMessage): Promise<Counts>;
 }
 
+/** Where tags are read and written. */
+export interface TagStore {
+  forPosts(accountId: string, postIds: string[]): Promise<Map<string, TagSummary[]>>;
+  suggest(
+    accountId: string,
+    query: string,
+    limit: number,
+  ): Promise<{ suggestions: TagSuggestion[]; recent: TagSummary[] }>;
+  set(change: TagChange): Promise<TagSummary[]>;
+}
+
 /** Diagnostics build only: where content-free observations are recorded. */
 export interface DiagnosticsSink {
   recordOperation(seen: OperationObservation): Promise<void>;
@@ -40,11 +57,20 @@ export interface WorkerDependencies {
   /** This extension's own id. Messages from anything else are ignored. */
   extensionId: string;
   store: CaptureStore;
+  tags: TagStore;
+  /** Tells every listening page that a post's tags changed. */
+  notify(message: TagsChangedMessage): void;
   /** Present only in the diagnostics build. Without it, diagnostics messages are ignored. */
   diagnostics?: DiagnosticsSink;
 }
 
-export type Reply = CaptureReply | { ok: boolean };
+export type Reply =
+  CaptureReply | TagsForPostsReply | TagsSuggestReply | TagsSetReply | { ok: boolean };
+
+/** True for this extension's own content scripts, in the top frame of a supported page. */
+export function isTrustedSender(sender: MessageSender, extensionId: string): boolean {
+  return sender.id === extensionId && sender.frameId === 0 && isSupportedUrl(sender.url);
+}
 
 /**
  * Returns a handler that answers a message with a reply that never rejects,
@@ -52,9 +78,7 @@ export type Reply = CaptureReply | { ok: boolean };
  */
 export function createWorkerHandler(deps: WorkerDependencies) {
   return (message: unknown, sender: MessageSender): Promise<Reply> | undefined => {
-    // Only this extension's own content scripts, in the top frame of a supported page.
-    if (sender.id !== deps.extensionId || sender.frameId !== 0) return undefined;
-    if (!isSupportedUrl(sender.url) || !isRuntimeMessage(message)) return undefined;
+    if (!isTrustedSender(sender, deps.extensionId) || !isRuntimeMessage(message)) return undefined;
 
     if (message.type === 'content/ready') return Promise.resolve({ ok: true });
 
@@ -65,6 +89,14 @@ export function createWorkerHandler(deps: WorkerDependencies) {
         (counts): CaptureReply => ({ ok: true, counts }),
         (): CaptureReply => ({ ok: false }),
       );
+    }
+
+    if (
+      message.type === 'tags/for-posts' ||
+      message.type === 'tags/suggest' ||
+      message.type === 'tags/set'
+    ) {
+      return handleTags(deps, message);
     }
 
     // Folded at build time, so production bundles carry none of this.
@@ -85,4 +117,36 @@ function record(diagnostics: DiagnosticsSink, message: DiagnosticsMessage): Prom
     () => ({ ok: true }),
     () => ({ ok: false }),
   );
+}
+
+function handleTags(deps: WorkerDependencies, message: TagMessage): Promise<Reply> {
+  const failed = (): Reply => ({ ok: false });
+  if (message.type === 'tags/for-posts') {
+    return deps.tags.forPosts(message.accountId, message.postIds).then(
+      (found): TagsForPostsReply => ({
+        ok: true,
+        posts: [...found].map(([postId, tags]) => ({ postId, tags })),
+      }),
+      failed,
+    );
+  }
+  if (message.type === 'tags/suggest') {
+    return deps.tags
+      .suggest(message.accountId, message.query, message.limit)
+      .then((found): TagsSuggestReply => ({ ok: true, ...found }), failed);
+  }
+  const { accountId, postId } = message;
+  return deps.tags
+    .set({
+      accountId,
+      postId,
+      add: message.add,
+      remove: message.remove,
+      ...(message.post ? { post: message.post } : {}),
+      ...(message.partial !== undefined ? { partial: message.partial } : {}),
+    })
+    .then((tags): TagsSetReply => {
+      deps.notify({ type: 'tags/changed', accountId, postId, tags });
+      return { ok: true, tags };
+    }, failed);
 }

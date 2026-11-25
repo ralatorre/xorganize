@@ -437,6 +437,8 @@ Notes:
 - Sources follow two signals. A post arriving through a bookmarks or likes timeline, or through a bookmark or like request, gets that source. For the other source, the post's own `legacy.bookmarked` and `legacy.favorited` fields are followed when present, so a post seen in the bookmarks timeline that is also liked is recorded as both, and one that has since been unliked elsewhere loses the like.
 - When a source is removed and the post has no other source and no tags, the post is deleted. The "keep posts" setting (DESIGN 4.7) will make this configurable.
 - Tag use counts are computed with a count on the `postTags` index, not stored, so they cannot drift.
+- Tagging a post that is not yet stored stores it from the copy the page loaded: from the seen cache when it is there, otherwise from the page itself, flagged partial (7.6). Its bookmark and like flags follow what the API reported, as for any captured post; tagging never sets them (DESIGN, decision 4). A post whose last tag is removed and that has no source is deleted. A tag on no post is kept, for later use; removing tags altogether is tag management (M3).
+- Tag names (`src/tags/names.ts`): NFKC-normalised, trimmed, inner runs of white space collapsed to one space, at most 50 characters as a person counts them, no semicolon, and no control, formatting or separator characters except the zero-width joiner that emoji sequences use. The comparison key is that name lower-cased. A new tag gets the lowest palette colour not yet in use, or the least used one once all twelve are (`src/tags/palette.ts`).
 
 ### 9.2 Dexie schema
 
@@ -453,7 +455,7 @@ db.version(1).stores({
 
 Rules:
 
-- All writes go through `repo.ts`. Any write that touches `postTags` runs in a transaction that also updates `posts.hasTags` and `tags.lastUsedAt`.
+- All writes go through `src/db/repo.ts` (posts, settings) and `src/db/tags.ts` (tags). Any write that touches `postTags` runs in a transaction that also updates `posts.hasTags` and `tags.lastUsedAt`.
 - Upserting a post merges: source flags are OR-ed, `firstSeenAt` and `savedAt` keep the earliest value, a full record replaces a partial one, and a partial record never overwrites a full one.
 - Schema changes add a new `db.version(n)` with an upgrade function. Old versions are never edited.
 
@@ -463,18 +465,20 @@ Stored as one `settings` row in the `meta` table of the same IndexedDB database,
 
 ## 10. Messaging
 
-Content scripts talk to the service worker over `runtime.sendMessage` for requests and a long-lived `runtime.connect` port for subscriptions. Every message is defined in `src/messaging/protocol.ts` as a discriminated union with a Valibot schema, and validated on receipt.
+Content scripts talk to the service worker over `runtime.sendMessage` for requests and a long-lived `runtime.connect` port for subscriptions. Every message is defined in `src/messaging/protocol.ts` as a discriminated union with a hand-written guard and size caps, and validated on receipt (see section 3 on Valibot).
 
 | Message | Direction | Purpose |
 | --- | --- | --- |
 | `capture/posts` | content → worker | Store posts from a bookmarks or likes timeline, or one the user just bookmarked or liked, with referenced posts and the IDs of unavailable ones. Capped at 200 items. The reply carries the account's new totals. |
 | `capture/clear` | content → worker | A bookmark or like was removed. The reply carries the account's new totals. |
-| `tags/for-posts` | content → worker | Tags for a batch of visible post IDs. |
-| `tags/suggest` | content → worker | Autocomplete: prefix, limit. |
-| `tags/set` | content → worker | Add or remove tags on one post; creates tags as needed; includes the post record when it is not yet stored. |
+| `tags/for-posts` | content → worker | **Built.** Tags for up to 100 visible post IDs. The reply lists each post's tags in the order they were applied. |
+| `tags/suggest` | content → worker | **Built.** Autocomplete: the typed text and a limit of up to 20. Names that start with the text come first, then names that contain it, each by use count. The reply also carries the five most recently used tags. |
+| `tags/set` | content → worker | **Built.** Adds tags by name and removes them by ID on one post, up to 20 of each, creating tags as needed. Carries the post record when the page has it, so that a post not yet stored can be. The reply carries the post's tags afterwards. |
 | `health/report` | content → worker | `capture-degraded` or `inline-ui-degraded`. |
-| `tags/changed` | worker → content (port) | Push updates for subscribed post IDs. |
+| `tags/changed` | worker → content (port) | **Built.** After every successful `tags/set`, sent to every open `tags` port: account, post ID and its tags. A content script ignores changes for an account other than its own. |
 | `settings/changed` | worker → content (port) | Push settings updates. |
+
+Ports are opened with the name `tags` and are accepted only from senders that pass the same check as messages. The worker keeps them in memory only. When the browser stops the worker, the ports close, and each content script reconnects when it next needs to.
 
 The service worker can be stopped by the browser at any time. It therefore keeps no state in memory that matters: every handler opens the database on demand, and the content script reconnects its port when it drops.
 

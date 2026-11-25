@@ -75,3 +75,15 @@ export interface Settings {
   /** Show avatars and media thumbnails, which the browser loads from X's image server. */
   remoteImages: boolean;
 }
+
+/** What is shown of a tag on a post: enough to draw a chip. */
+export interface TagSummary {
+  id: TagId;
+  name: string;
+  color: number;
+}
+
+/** A tag offered while typing, with how many posts carry it. */
+export interface TagSuggestion extends TagSummary {
+  count: number;
+}

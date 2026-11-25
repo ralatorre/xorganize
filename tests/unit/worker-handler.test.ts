@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { normalisePost } from '@/src/capture/normalise';
-import type { Counts } from '@/src/db/types';
-import type { CaptureClearMessage, CapturePostsMessage } from '@/src/messaging/protocol';
-import { createWorkerHandler, type MessageSender } from '@/src/worker/handler';
+import type { TagChange } from '@/src/db/tags';
+import type { Counts, TagSummary } from '@/src/db/types';
+import type {
+  CaptureClearMessage,
+  CapturePostsMessage,
+  TagsChangedMessage,
+} from '@/src/messaging/protocol';
+import { createWorkerHandler, isTrustedSender, type MessageSender } from '@/src/worker/handler';
 import { rawPost } from '../fixtures/posts';
 
 const EXTENSION = 'own-extension-id';
@@ -25,19 +30,31 @@ const clear: CaptureClearMessage = {
   postId: '101',
 };
 
+const RUST: TagSummary = { id: 'tag-1', name: 'rust', color: 0 };
+
 function setup(outcome: 'stored' | 'failed' = 'stored') {
   const saved: CapturePostsMessage[] = [];
   const cleared: CaptureClearMessage[] = [];
-  const result = () =>
-    outcome === 'stored' ? Promise.resolve(COUNTS) : Promise.reject(new Error('quota'));
+  const changes: TagChange[] = [];
+  const notified: TagsChangedMessage[] = [];
+  const result = <T>(value: T) =>
+    outcome === 'stored' ? Promise.resolve(value) : Promise.reject(new Error('quota'));
   const handle = createWorkerHandler({
     extensionId: EXTENSION,
     store: {
-      save: (message) => (saved.push(message), result()),
-      clear: (message) => (cleared.push(message), result()),
+      save: (message) => (saved.push(message), result(COUNTS)),
+      clear: (message) => (cleared.push(message), result(COUNTS)),
     },
+    tags: {
+      forPosts: (_, postIds) =>
+        result(new Map(postIds.map((id) => [id, id === '101' ? [RUST] : []]))),
+      suggest: (_, query) =>
+        result({ suggestions: [{ ...RUST, count: query.length }], recent: [RUST] }),
+      set: (change) => (changes.push(change), result([RUST])),
+    },
+    notify: (message) => void notified.push(message),
   });
-  return { handle, saved, cleared };
+  return { handle, saved, cleared, changes, notified };
 }
 
 describe('createWorkerHandler', () => {
@@ -86,5 +103,91 @@ describe('createWorkerHandler', () => {
     const { handle, saved, cleared } = setup();
     expect(handle(message, FROM_X)).toBeUndefined();
     expect([...saved, ...cleared]).toEqual([]);
+  });
+});
+
+describe('tag messages', () => {
+  it('answers with the tags of each post asked about', async () => {
+    const { handle } = setup();
+    expect(
+      await handle({ type: 'tags/for-posts', accountId: ACCOUNT, postIds: ['101', '102'] }, FROM_X),
+    ).toEqual({
+      ok: true,
+      posts: [
+        { postId: '101', tags: [RUST] },
+        { postId: '102', tags: [] },
+      ],
+    });
+  });
+
+  it('answers with suggestions and recent tags', async () => {
+    const { handle } = setup();
+    expect(
+      await handle({ type: 'tags/suggest', accountId: ACCOUNT, query: 'ru', limit: 5 }, FROM_X),
+    ).toEqual({ ok: true, suggestions: [{ ...RUST, count: 2 }], recent: [RUST] });
+  });
+
+  it('changes a post’s tags and tells every listening page', async () => {
+    const { handle, changes, notified } = setup();
+    const post = normalisePost(rawPost({ id: '101' }))!;
+    const reply = await handle(
+      {
+        type: 'tags/set',
+        accountId: ACCOUNT,
+        postId: '101',
+        add: ['rust'],
+        remove: [],
+        post,
+        partial: false,
+      },
+      FROM_X,
+    );
+    expect(reply).toEqual({ ok: true, tags: [RUST] });
+    expect(changes).toEqual([
+      { accountId: ACCOUNT, postId: '101', add: ['rust'], remove: [], post, partial: false },
+    ]);
+    expect(notified).toEqual([
+      { type: 'tags/changed', accountId: ACCOUNT, postId: '101', tags: [RUST] },
+    ]);
+  });
+
+  it('says so when a tag change fails, and tells no one', async () => {
+    const { handle, notified } = setup('failed');
+    const message = {
+      type: 'tags/set',
+      accountId: ACCOUNT,
+      postId: '101',
+      add: ['rust'],
+      remove: [],
+    };
+    expect(await handle(message, FROM_X)).toEqual({ ok: false });
+    expect(
+      await handle({ type: 'tags/for-posts', accountId: ACCOUNT, postIds: [] }, FROM_X),
+    ).toEqual({
+      ok: false,
+    });
+    expect(notified).toEqual([]);
+  });
+
+  it('ignores tag messages from anywhere else', () => {
+    const { handle, changes } = setup();
+    const message = {
+      type: 'tags/set',
+      accountId: ACCOUNT,
+      postId: '101',
+      add: ['rust'],
+      remove: [],
+    };
+    expect(handle(message, { ...FROM_X, frameId: 1 })).toBeUndefined();
+    expect(changes).toEqual([]);
+  });
+});
+
+describe('isTrustedSender', () => {
+  it('trusts only this extension, in the top frame, on x.com', () => {
+    expect(isTrustedSender(FROM_X, EXTENSION)).toBe(true);
+    expect(isTrustedSender({ ...FROM_X, id: 'other' }, EXTENSION)).toBe(false);
+    expect(isTrustedSender({ ...FROM_X, frameId: 2 }, EXTENSION)).toBe(false);
+    expect(isTrustedSender({ ...FROM_X, url: 'https://evil.example/' }, EXTENSION)).toBe(false);
   });
 });
