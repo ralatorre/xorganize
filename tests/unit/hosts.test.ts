@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { X_MATCHES, isSupportedUrl } from '@/src/hosts';
+import { X_MATCHES, isSupportedUrl, xImageUrl } from '@/src/hosts';
 
 describe('X_MATCHES', () => {
   it('covers exactly one host', () => {
@@ -28,5 +28,43 @@ describe('isSupportedUrl', () => {
     'chrome-extension://abcdef/library.html',
   ])('rejects %s', (url) => {
     expect(isSupportedUrl(url)).toBe(false);
+  });
+});
+
+describe('xImageUrl', () => {
+  it('keeps avatars as they are', () => {
+    const avatar = 'https://pbs.twimg.com/profile_images/1/abc_normal.jpg';
+    expect(xImageUrl(avatar)).toBe(avatar);
+  });
+
+  it('asks for photos at the small size', () => {
+    expect(xImageUrl('https://pbs.twimg.com/media/abc.jpg')).toBe(
+      'https://pbs.twimg.com/media/abc.jpg?name=small',
+    );
+    expect(xImageUrl('https://pbs.twimg.com/media/abc?format=png&name=orig')).toBe(
+      'https://pbs.twimg.com/media/abc?format=png&name=small',
+    );
+  });
+
+  it('keeps video stills as they are', () => {
+    const still = 'https://pbs.twimg.com/ext_tw_video_thumb/1/pu/img/abc.jpg';
+    expect(xImageUrl(still)).toBe(still);
+  });
+
+  it.each([
+    undefined,
+    '',
+    'not a url',
+    'http://pbs.twimg.com/media/abc.jpg',
+    'https://pbs.twimg.com:8443/media/abc.jpg',
+    'https://user:pass@pbs.twimg.com/media/abc.jpg',
+    'https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png',
+    'https://video.twimg.com/ext_tw_video/1/pu/vid/abc.mp4',
+    'https://pbs.twimg.com.evil.example/media/abc.jpg',
+    'https://evil.example/pbs.twimg.com/media/abc.jpg',
+    'https://media.example/photo1.jpg',
+    `https://pbs.twimg.com/${'a'.repeat(2048)}`,
+  ])('rejects %s', (url) => {
+    expect(xImageUrl(url)).toBeUndefined();
   });
 });

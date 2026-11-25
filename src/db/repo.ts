@@ -6,7 +6,7 @@ import Dexie from 'dexie';
 import type { CapturedPost } from '@/src/capture/normalise';
 import type { SourceKind } from '@/src/capture/operations';
 import type { LibraryDatabase } from './schema';
-import type { AccountId, Counts, PostId, StoredPost } from './types';
+import type { AccountId, Counts, PostId, Settings, StoredPost } from './types';
 
 export interface CaptureBatch {
   accountId: AccountId;
@@ -21,6 +21,9 @@ export interface CaptureBatch {
 }
 
 const ACTIVE_ACCOUNT = 'activeAccount';
+const SETTINGS = 'settings';
+
+export const DEFAULT_SETTINGS: Readonly<Settings> = { remoteImages: true };
 const SORT_WIDTH = 30;
 
 /**
@@ -231,4 +234,22 @@ export function countInBoth(db: LibraryDatabase, accountId: AccountId): Promise<
     .between([accountId, 1, Dexie.minKey], [accountId, 1, Dexie.maxKey])
     .filter((post) => post.isLike === 1)
     .count();
+}
+
+/** The settings, with defaults for anything missing or not of the expected type. */
+export async function readSettings(db: LibraryDatabase): Promise<Settings> {
+  const row = await db.meta.get(['', SETTINGS]);
+  const stored = typeof row?.value === 'object' && row.value !== null ? row.value : {};
+  const { remoteImages } = stored as Partial<Record<keyof Settings, unknown>>;
+  return {
+    remoteImages: typeof remoteImages === 'boolean' ? remoteImages : DEFAULT_SETTINGS.remoteImages,
+  };
+}
+
+export function updateSettings(db: LibraryDatabase, changes: Partial<Settings>): Promise<Settings> {
+  return db.transaction('rw', db.meta, async () => {
+    const settings = { ...(await readSettings(db)), ...changes };
+    await db.meta.put({ accountId: '', key: SETTINGS, value: settings });
+    return settings;
+  });
 }

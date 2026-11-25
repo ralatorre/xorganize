@@ -4,6 +4,7 @@ import {
   cursorEntry,
   homeTimeline,
   likesTimeline,
+  photo,
   postEntry,
   rawPost,
 } from '../fixtures/posts';
@@ -60,14 +61,14 @@ const RESPONSES: Record<string, unknown> = {
   UnfavoriteTweet: { data: { unfavorite_tweet: 'Done' } },
 };
 
-async function serveStandIn(context: BrowserContext) {
+async function serveStandIn(context: BrowserContext, responses = RESPONSES) {
   await context.addCookies([
     { name: 'twid', value: `u%3D${VIEWER}`, domain: 'x.com', path: '/', secure: true },
   ]);
   await context.route('https://x.com/**', (route) => {
     const op = new URL(route.request().url()).pathname.split('/').pop() ?? '';
-    return op in RESPONSES
-      ? route.fulfill({ contentType: 'application/json', body: JSON.stringify(RESPONSES[op]) })
+    return op in responses
+      ? route.fulfill({ contentType: 'application/json', body: JSON.stringify(responses[op]) })
       : route.fulfill({ contentType: 'text/html', body: STAND_IN_PAGE });
   });
 }
@@ -233,4 +234,145 @@ test('captures nothing when no account is signed in', async ({ context, extensio
 
   await expect(library.getByRole('heading', { name: 'Your library is empty' })).toBeVisible();
   expect(await banner(site)).toBeUndefined();
+});
+
+// Placeholders on X's image host. Requests for them are answered by the test.
+const AVATAR = 'https://pbs.twimg.com/profile_images/1/avatar_normal.jpg';
+const X_PHOTO = {
+  type: 'photo',
+  url: 'https://t.example/media1',
+  media_url_https: 'https://pbs.twimg.com/media/photo1.jpg',
+  ext_alt_text: 'A placeholder photo',
+};
+const X_VIDEO = {
+  type: 'video',
+  url: 'https://t.example/video1',
+  media_url_https: 'https://pbs.twimg.com/ext_tw_video_thumb/1/pu/img/still1.jpg',
+  video_info: {
+    variants: [{ content_type: 'video/mp4', bitrate: 1, url: 'https://video.twimg.com/v1.mp4' }],
+  },
+};
+const X_SENSITIVE = { ...X_PHOTO, media_url_https: 'https://pbs.twimg.com/media/photo2.jpg' };
+
+/** A 1×1 PNG. */
+const PIXEL = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64',
+);
+
+test('shows images from X without cookies or a referrer, and none once turned off', async ({
+  context,
+  extensionId,
+}) => {
+  await serveStandIn(context, {
+    Bookmarks: bookmarksTimeline([
+      postEntry(
+        rawPost({
+          id: '603',
+          text: 'Photo and video',
+          avatarUrl: AVATAR,
+          media: [X_PHOTO, X_VIDEO],
+        }),
+        '9603',
+      ),
+      postEntry(
+        rawPost({
+          id: '602',
+          text: 'Sensitive',
+          avatarUrl: AVATAR,
+          sensitive: true,
+          media: [X_SENSITIVE],
+        }),
+        '9602',
+      ),
+      // Avatar and photo on another host: never loaded.
+      postEntry(rawPost({ id: '601', text: 'Elsewhere', media: [photo()] }), '9601'),
+    ]),
+  });
+  // A cookie X's image server could read, if the browser sent it.
+  await context.addCookies([
+    {
+      name: 'tracker',
+      value: 'set',
+      domain: '.twimg.com',
+      path: '/',
+      secure: true,
+      sameSite: 'None',
+    },
+  ]);
+  const requests: Array<{ url: string; headers: Record<string, string> }> = [];
+  await context.route('https://pbs.twimg.com/**', async (route) => {
+    const headers = await route.request().allHeaders();
+    requests.push({ url: route.request().url(), headers });
+    await route.fulfill({
+      contentType: 'image/png',
+      body: PIXEL,
+      headers: { 'access-control-allow-origin': headers.origin ?? '' },
+    });
+  });
+
+  const site = await context.newPage();
+  await site.goto('https://x.com/i/bookmarks');
+  await timeline(site, 'Bookmarks');
+  const library = await context.newPage();
+  await library.goto(`chrome-extension://${extensionId}/library.html`);
+  await expect(library.getByText('3 bookmarks')).toBeVisible();
+
+  const card = (text: string) => library.locator('.post', { hasText: text });
+  const loaded = (text: string) =>
+    card(text)
+      .locator('img')
+      .evaluateAll((images) =>
+        images.map((image) => [
+          (image as HTMLImageElement).currentSrc,
+          (image as HTMLImageElement).naturalWidth,
+        ]),
+      );
+
+  // Avatar, photo at the small size, and the video's still. Never the video file.
+  await expect
+    .poll(() => loaded('Photo and video'))
+    .toEqual([
+      [AVATAR, 1],
+      ['https://pbs.twimg.com/media/photo1.jpg?name=small', 1],
+      [X_VIDEO.media_url_https, 1],
+    ]);
+  await expect(card('Photo and video').getByText('Video', { exact: true })).toBeVisible();
+  await expect(
+    card('Photo and video').getByRole('img', { name: 'A placeholder photo' }),
+  ).toBeVisible();
+
+  // Sensitive media waits to be asked for.
+  expect(await loaded('Sensitive')).toEqual([[AVATAR, 1]]);
+  await card('Sensitive').getByRole('button', { name: 'Show sensitive media' }).click();
+  await expect
+    .poll(() => loaded('Sensitive'))
+    .toEqual([
+      [AVATAR, 1],
+      ['https://pbs.twimg.com/media/photo2.jpg?name=small', 1],
+    ]);
+
+  // Nothing from any other host, and an initial in place of the avatar.
+  expect(await loaded('Elsewhere')).toEqual([]);
+  await expect(card('Elsewhere').locator('.avatar--placeholder')).toHaveText('E');
+  await expect(card('Elsewhere').getByText('1 attachment')).toBeVisible();
+
+  // Every request carried the image's address and nothing that identifies the user.
+  expect(requests.length).toBeGreaterThan(0);
+  for (const { headers } of requests) {
+    expect(headers.cookie).toBeUndefined();
+    expect(headers.referer).toBeUndefined();
+    expect(headers.origin).toBe(`chrome-extension://${extensionId}`);
+  }
+
+  // Turned off, no image is requested, and that survives a reload.
+  await library.getByRole('checkbox', { name: /Show images from X/ }).uncheck();
+  await expect(library.locator('img')).toHaveCount(0);
+  const before = requests.length;
+  await library.reload();
+  await expect(library.getByText('3 bookmarks')).toBeVisible();
+  await expect(library.getByRole('checkbox', { name: /Show images from X/ })).not.toBeChecked();
+  await expect(library.locator('img')).toHaveCount(0);
+  await expect(card('Photo and video').getByText('2 attachments')).toBeVisible();
+  expect(requests.length).toBe(before);
 });

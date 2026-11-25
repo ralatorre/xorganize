@@ -20,3 +20,31 @@ export function isSupportedUrl(url: string | undefined): boolean {
     return false;
   }
 }
+
+/**
+ * The one host the library may load images from: X's image server, which
+ * holds avatars, photos and the stills of videos and gifs. Keep in sync with
+ * `img-src` in wxt.config.ts. Anything elsewhere is shown as a placeholder.
+ */
+export const X_IMAGE_HOST = 'pbs.twimg.com';
+
+/**
+ * The URL to load for an image from X, or undefined when it is not on
+ * X_IMAGE_HOST. Photos are asked for at X's "small" size, which is plenty for
+ * a thumbnail and much less to download than the original.
+ */
+export function xImageUrl(value: string | undefined): string | undefined {
+  if (!value || value.length > 2048) return undefined;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== 'https:' || url.hostname !== X_IMAGE_HOST || url.port !== '') {
+    return undefined;
+  }
+  if (url.username !== '' || url.password !== '') return undefined;
+  if (url.pathname.startsWith('/media/')) url.searchParams.set('name', 'small');
+  return url.href;
+}
