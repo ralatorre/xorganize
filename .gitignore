@@ -1,0 +1,57 @@
+# Dependencies and build output
+node_modules/
+.output/
+.wxt/
+dist/
+coverage/
+*.tsbuildinfo
+web-ext.config.ts
+web-ext-artifacts/
+
+# Packaged extensions and signing keys
+*.crx
+*.xpi
+*.zip
+*.pem
+*.key
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Captured network data: contains session cookies, auth tokens and personal timelines
+*.har
+fixtures/raw/
+captures/
+
+# Personal data exports produced by the extension
+xorganize-export-*.json
+xorganize-export-*.csv
+*.backup.json
+
+# Local AI assistant and agent tooling
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+.claude.json
+.mcp.json
+AGENTS.md
+.cursor/
+.cursorrules
+.aider*
+.continue/
+.copilot/
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
