@@ -191,8 +191,8 @@ test.describe('diagnostics build', () => {
     const library = await context.newPage();
     await library.goto(`chrome-extension://${extensionId}/library.html`);
     await expect(library.getByRole('rowheader', { name: 'CreateBookmark' })).toBeVisible();
-    await expect(library.getByRole('row', { name: /^Bookmarks 1 fetch 4 3$/ })).toBeVisible();
-    await expect(library.getByRole('row', { name: /^Likes 1 xhr 4 3$/ })).toBeVisible();
+    await expect(library.getByRole('row', { name: /^Bookmarks 1 fetch 5 3$/ })).toBeVisible();
+    await expect(library.getByRole('row', { name: /^Likes 1 xhr 5 3$/ })).toBeVisible();
 
     // The page-level facts are recorded shortly after the last response.
     await site.waitForTimeout(2000);
@@ -218,10 +218,14 @@ test.describe('diagnostics build', () => {
       hosts: ['x.com'],
       methods: ['GET'],
       statuses: [200],
-      entriesTotal: 4,
+      entriesTotal: 5,
       tweetResultsTotal: 3,
-      entryIdPatterns: ['cursor-bottom-<n>', 'tweet-<n>'],
-      sortIndexDescending: { yes: 1, no: 0 },
+      postEntriesTotal: 3,
+      entryIdPatterns: ['cursor-bottom-<n>', 'cursor-top-<n>', 'tweet-<n>'],
+      postSortIndexDescending: { yes: 1, no: 0 },
+      sortIndexIsPostIdTotal: 0,
+      bookmarked: { yes: 3, no: 0 },
+      favorited: { yes: 0, no: 3 },
       variableKeys: ['.count'],
     });
     expect(byName.Likes).toMatchObject({

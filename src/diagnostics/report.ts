@@ -5,6 +5,7 @@
 
 import type { EnvironmentObservation } from './environment';
 import type { OperationObservation } from './observe';
+import type { YesNo } from './shape';
 
 export interface OperationRecord {
   op: string;
@@ -24,7 +25,14 @@ export interface OperationRecord {
   entriesPerResponse: number[];
   entriesTotal: number;
   tweetResultsTotal: number;
-  sortIndexDescending: { yes: number; no: number };
+  postEntriesTotal: number;
+  /** Responses whose post entries were, or were not, sorted from high to low. */
+  postSortIndexDescending: YesNo;
+  /** Post entries whose sort index is the post's own id. */
+  sortIndexIsPostIdTotal: number;
+  /** The viewer's own state on the posts seen. */
+  bookmarked: YesNo;
+  favorited: YesNo;
   variableKeys: string[];
   requestBodyKeys: string[];
   userIdIsViewer: { yes: number; no: number; unknown: number };
@@ -69,7 +77,11 @@ export function mergeOperation(
     entriesPerResponse: [],
     entriesTotal: 0,
     tweetResultsTotal: 0,
-    sortIndexDescending: { yes: 0, no: 0 },
+    postEntriesTotal: 0,
+    postSortIndexDescending: { yes: 0, no: 0 },
+    sortIndexIsPostIdTotal: 0,
+    bookmarked: { yes: 0, no: 0 },
+    favorited: { yes: 0, no: 0 },
     variableKeys: [],
     requestBodyKeys: [],
     userIdIsViewer: { yes: 0, no: 0, unknown: 0 },
@@ -96,8 +108,14 @@ export function mergeOperation(
     );
     record.entriesTotal += seen.timeline.entries;
     record.tweetResultsTotal += seen.timeline.tweetResults;
-    if (seen.timeline.sortIndexDescending === true) record.sortIndexDescending.yes += 1;
-    if (seen.timeline.sortIndexDescending === false) record.sortIndexDescending.no += 1;
+    record.postEntriesTotal += seen.timeline.postEntries;
+    record.sortIndexIsPostIdTotal += seen.timeline.sortIndexIsPostId;
+    if (seen.timeline.postSortIndexDescending === true) record.postSortIndexDescending.yes += 1;
+    if (seen.timeline.postSortIndexDescending === false) record.postSortIndexDescending.no += 1;
+    for (const flag of ['bookmarked', 'favorited'] as const) {
+      record[flag].yes += seen.timeline[flag].yes;
+      record[flag].no += seen.timeline[flag].no;
+    }
   }
   record.variableKeys = union(record.variableKeys, seen.variableKeys ?? []);
   record.requestBodyKeys = union(record.requestBodyKeys, seen.requestBodyKeys ?? []);

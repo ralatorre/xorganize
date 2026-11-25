@@ -612,3 +612,23 @@ Each of these is from observed behaviour and has not been confirmed for this spe
 10. Firefox behaviour for MAIN-world content scripts and the fallback when no side panel is available. In particular, whether both content scripts start before any page script there, which the private channel's handshake (7.2) depends on. This is tested for Chromium only.
 11. Whether the library can be evicted under storage pressure without `unlimitedStorage`, and whether `navigator.storage.persist()` prevents it (6.1).
 12. How closely the `fetch` and `XMLHttpRequest` wrappers can be made to match the originals, and what remains detectable (7.1).
+
+### 18.1 Results so far
+
+From a first diagnostics run against a real free account on 2026-11-25, in Chromium.
+
+| # | Result |
+| --- | --- |
+| 1 | **Confirmed.** All calls go to `https://x.com/i/api/graphql/<id>/<OperationName>`. `Bookmarks`, `Likes` and `HomeTimeline` exist under those names. |
+| 2 | **Confirmed.** Every observed call used `XMLHttpRequest`, with `GET` for timelines. |
+| 3 | **Confirmed.** The interceptor saw the client's calls, so it is installed before the client takes its references. |
+| 4 | **Partly.** Entries carry `entryId` and `sortIndex`. A response holds post entries followed by a top cursor and a bottom cursor. Ordering of post entries still to be measured. |
+| 5 | **Confirmed, with corrections.** The author's handle and name are at `core.user_results.result.core.*` and the avatar at `avatar.image_url`; the older `legacy.*` locations were absent. Text, long-form text, dates, language, media, links and quoted posts are where 7.4 expects. `TweetWithVisibilityResults` wraps a post under `.tweet`. Timeline roots: `data.bookmark_timeline_v2.timeline`, `data.user.result.timeline.timeline`, `data.home.home_timeline_urt`. |
+| 6 | **Open.** No mutation was observed in the first run. |
+| 7 | **Confirmed.** The cookie is readable and matches the expected format. For `Likes`, `variables.userId` equalled the account's ID. |
+| 8 | **Confirmed.** Every selector in `src/dom/selectors.ts` matched on the home, bookmarks and likes pages. |
+| 9 | **Open.** Not enough pages were loaded to reach the end of a timeline. |
+
+One finding not anticipated by the spec: every post carries `legacy.bookmarked` and `legacy.favorited`, the account's own state for that post. A post seen in any timeline therefore says whether it is bookmarked or liked, which gives a second way to keep sources accurate.
+
+Also open: the address of the bookmarks and likes pages, which the first run masked too aggressively to read.

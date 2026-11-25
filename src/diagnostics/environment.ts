@@ -39,12 +39,21 @@ const STATIC_SEGMENTS = new Set([
   'followers',
 ]);
 
-/** `/someone/status/123` -> `/<handle>/status/<n>`. */
+const ROUTE_WORD = /^[a-z_]{1,30}$/;
+
+/**
+ * `/someone/status/123` -> `/<handle>/status/<n>`.
+ *
+ * One segment is kept as written: the one straight after `/i/`. That prefix
+ * is X's namespace for its own routes (`/i/bookmarks`, `/i/flow/...`), where
+ * a handle cannot appear, and the route name is needed to recognise the page.
+ */
 export function pageKind(pathname: string): string {
   const segments = pathname.split('/').filter(Boolean).slice(0, 6);
   const kinds = segments.map((segment, index) => {
     if (/^\d+$/.test(segment)) return '<n>';
     if (STATIC_SEGMENTS.has(segment)) return segment;
+    if (index === 1 && segments[0] === 'i' && ROUTE_WORD.test(segment)) return segment;
     return index === 0 ? '<handle>' : '<other>';
   });
   return `/${kinds.join('/')}`;

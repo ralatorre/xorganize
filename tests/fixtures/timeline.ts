@@ -39,6 +39,8 @@ function post(id: string, sortIndex: string) {
               created_at: 'Mon Jan 01 00:00:00 +0000 2024',
               lang: 'en',
               possibly_sensitive: false,
+              bookmarked: true,
+              favorited: false,
               entities: { urls: [], media: [] },
             },
           },
@@ -65,6 +67,8 @@ const entries = [
   post('1700000000000000003', '1800000000000000003'),
   post('1700000000000000002', '1800000000000000002'),
   post('1700000000000000001', '1800000000000000001'),
+  // As on the real site: both cursors come after the posts, top cursor first.
+  cursor('top', '1800000000000000004'),
   cursor('bottom', '1800000000000000000'),
 ];
 

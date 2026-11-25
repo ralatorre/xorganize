@@ -55,3 +55,36 @@ describe('anyOperationFromUrl', () => {
     expect(anyOperationFromUrl(url('https://x.com/graphql/abc/has space'))).toBeUndefined();
   });
 });
+
+describe('anyOperationFromUrl, for endpoints that are not GraphQL', () => {
+  it.each([
+    ['https://x.com/i/api/1.1/favorites/create.json', 'Rest_favorites_create'],
+    ['https://x.com/i/api/2/notifications/all.json?count=20', 'Rest_notifications_all'],
+    ['https://api.x.com/1.1/jot/client_event.json', 'Rest_jot_client_event'],
+    ['https://x.com/i/api/2/guide.json', 'Rest_guide'],
+    ['https://x.com/i/api/fleets/v1/avatar_content', 'Rest'],
+  ])('names %s as %s', (text, name) => {
+    expect(anyOperationFromUrl(url(text))).toBe(name);
+  });
+
+  it.each([
+    ['an id in the file name', 'https://x.com/i/api/1.1/dm/conversation/123-456.json'],
+    ['a mixed-case segment', 'https://x.com/i/api/1.1/users/SomeHandle/thing'],
+    ['a handle-like final segment', 'https://x.com/i/api/1.1/users/some_handle'],
+  ])('never includes %s in a name', (_label, text) => {
+    expect(anyOperationFromUrl(url(text))).toBe('Rest');
+  });
+
+  it('keeps a route word but not an id or mixed-case parent', () => {
+    expect(anyOperationFromUrl(url('https://x.com/i/api/1.1/12345/show.json'))).toBe('Rest_show');
+    expect(anyOperationFromUrl(url('https://x.com/i/api/1.1/SomeHandle/show.json'))).toBe(
+      'Rest_show',
+    );
+  });
+
+  it('ignores requests that are not to the API', () => {
+    expect(anyOperationFromUrl(url('https://x.com/home'))).toBeUndefined();
+    expect(anyOperationFromUrl(url('https://x.com/manifest.json'))).toBeUndefined();
+    expect(anyOperationFromUrl(url('https://example.com/i/api/1.1/a/b.json'))).toBeUndefined();
+  });
+});

@@ -25,9 +25,21 @@ export interface ShapeSummary {
 export interface TimelineStats {
   entries: number;
   entryIdPatterns: string[];
-  /** Whether entry sort indexes run from high to low; null if there are fewer than two. */
-  sortIndexDescending: boolean | null;
   tweetResults: number;
+  /** Entries that hold a post, as opposed to cursors and modules. */
+  postEntries: number;
+  /** Whether the post entries' sort indexes run from high to low; null with fewer than two. */
+  postSortIndexDescending: boolean | null;
+  /** How many post entries use the post's own id as their sort index. */
+  sortIndexIsPostId: number;
+  /** The viewer's own state on the posts seen, as counts. */
+  bookmarked: YesNo;
+  favorited: YesNo;
+}
+
+export interface YesNo {
+  yes: number;
+  no: number;
 }
 
 const MAX_PATHS = 4000;
@@ -137,10 +149,19 @@ export function describeKeys(value: unknown): string[] {
 
 export function timelineStats(value: unknown): TimelineStats {
   const patterns = new Set<string>();
-  const sortIndexes: bigint[] = [];
+  const postSortIndexes: bigint[] = [];
+  const bookmarked: YesNo = { yes: 0, no: 0 };
+  const favorited: YesNo = { yes: 0, no: 0 };
   let entries = 0;
+  let postEntries = 0;
+  let sortIndexIsPostId = 0;
   let tweetResults = 0;
   let nodes = 0;
+
+  const count = (tally: YesNo, flag: unknown) => {
+    if (flag === true) tally.yes += 1;
+    if (flag === false) tally.no += 1;
+  };
 
   const walk = (node: unknown, depth: number) => {
     if (++nodes > MAX_NODES || depth > MAX_DEPTH) return;
@@ -150,19 +171,57 @@ export function timelineStats(value: unknown): TimelineStats {
       if (typeof node.entryId === 'string' && typeof node.sortIndex === 'string') {
         entries += 1;
         patterns.add(entryIdPattern(node.entryId));
-        if (/^\d{1,30}$/.test(node.sortIndex)) sortIndexes.push(BigInt(node.sortIndex));
+        const post = postOfEntry(node);
+        if (post) {
+          postEntries += 1;
+          if (/^\d{1,30}$/.test(node.sortIndex)) postSortIndexes.push(BigInt(node.sortIndex));
+          if (post.rest_id === node.sortIndex) sortIndexIsPostId += 1;
+        }
       }
-      if (isRecord(node.tweet_results) && isRecord(node.tweet_results.result)) tweetResults += 1;
+      if (isRecord(node.tweet_results)) {
+        const post = unwrapPost(node.tweet_results.result);
+        if (post) {
+          tweetResults += 1;
+          if (isRecord(post.legacy)) {
+            count(bookmarked, post.legacy.bookmarked);
+            count(favorited, post.legacy.favorited);
+          }
+        }
+      }
       for (const key of Object.keys(node)) walk(node[key], depth + 1);
     }
   };
   walk(value, 0);
 
-  let sortIndexDescending: boolean | null = null;
-  if (sortIndexes.length >= 2) {
-    sortIndexDescending = sortIndexes.every((index, i) => i === 0 || index < sortIndexes[i - 1]!);
+  let postSortIndexDescending: boolean | null = null;
+  if (postSortIndexes.length >= 2) {
+    postSortIndexDescending = postSortIndexes.every(
+      (index, i) => i === 0 || index < postSortIndexes[i - 1]!,
+    );
   }
-  return { entries, entryIdPatterns: [...patterns].sort(), sortIndexDescending, tweetResults };
+  return {
+    entries,
+    entryIdPatterns: [...patterns].sort(),
+    tweetResults,
+    postEntries,
+    postSortIndexDescending,
+    sortIndexIsPostId,
+    bookmarked,
+    favorited,
+  };
+}
+
+/** A post result, with the visibility wrapper removed if there is one. */
+function unwrapPost(result: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(result)) return undefined;
+  return isRecord(result.tweet) ? result.tweet : result;
+}
+
+function postOfEntry(entry: Record<string, unknown>): Record<string, unknown> | undefined {
+  const content = entry.content;
+  if (!isRecord(content) || !isRecord(content.itemContent)) return undefined;
+  const results = content.itemContent.tweet_results;
+  return isRecord(results) ? unwrapPost(results.result) : undefined;
 }
 
 /** `tweet-1234567` -> `tweet-<n>`. Unknown words become `<word>`, so no handle or text can leak. */

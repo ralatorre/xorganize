@@ -37,7 +37,7 @@ describe('observe', () => {
       op: 'Bookmarks',
       transport: 'xhr',
       parseable: true,
-      timeline: { entries: 4, tweetResults: 3, sortIndexDescending: true },
+      timeline: { entries: 5, tweetResults: 3, postEntries: 3, postSortIndexDescending: true },
       variableKeys: ['.count', '.cursor'],
       userIdIsViewer: null,
     });
@@ -120,14 +120,18 @@ describe('mergeOperation', () => {
       transports: ['fetch', 'xhr'],
       statuses: [200, 429],
       responsesWithErrors: 1,
-      entriesPerResponse: [4, 0],
-      entriesTotal: 4,
+      entriesPerResponse: [5, 0],
+      entriesTotal: 5,
       tweetResultsTotal: 3,
-      sortIndexDescending: { yes: 1, no: 0 },
+      postEntriesTotal: 3,
+      postSortIndexDescending: { yes: 1, no: 0 },
+      sortIndexIsPostIdTotal: 0,
+      bookmarked: { yes: 3, no: 0 },
+      favorited: { yes: 0, no: 3 },
       userIdIsViewer: { yes: 0, no: 0, unknown: 2 },
     });
     expect(record.paths['.errors']).toEqual(['array']);
-    expect(record.entryIdPatterns).toEqual(['cursor-bottom-<n>', 'tweet-<n>']);
+    expect(record.entryIdPatterns).toEqual(['cursor-bottom-<n>', 'cursor-top-<n>', 'tweet-<n>']);
   });
 });
 
@@ -172,6 +176,10 @@ describe('pageKind', () => {
     ['/', '/'],
     ['/home', '/home'],
     ['/i/bookmarks', '/i/bookmarks'],
+    ['/i/some_route', '/i/some_route'],
+    ['/i/some_route/likes', '/i/some_route/likes'],
+    [`/i/${MARKER}`, '/i/<other>'],
+    [`/i/flow/${MARKER}`, '/i/flow/<other>'],
     [`/${MARKER}_handle`, '/<handle>'],
     [`/${MARKER}_handle/likes`, '/<handle>/likes'],
     [`/${MARKER}_handle/status/1700000000000000001`, '/<handle>/status/<n>'],

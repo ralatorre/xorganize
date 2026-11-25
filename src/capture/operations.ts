@@ -52,10 +52,30 @@ export function knownOperationFromUrl(url: URL): string | undefined {
   return op !== undefined && isKnownOperation(op) ? op : undefined;
 }
 
+const REST_FILE = /^([a-z_]{1,30})\.json$/;
+const ROUTE_WORD = /^[a-z_]{1,30}$/;
+
 /**
- * The operation name for any GraphQL-looking URL on any host. Used only by
- * the diagnostics build, to learn which operations and hosts really exist.
+ * A name for any API request, GraphQL or not, on any host. Used only by the
+ * diagnostics build, to learn which operations and endpoints really exist.
+ *
+ * Non-GraphQL endpoints are named from their last one or two path segments,
+ * and only when those are plain lower-case route words, so an id or a handle
+ * in a path can never become part of a name.
  */
 export function anyOperationFromUrl(url: URL): string | undefined {
-  return ANY_GRAPHQL_PATH.exec(url.pathname)?.[1];
+  const graphql = ANY_GRAPHQL_PATH.exec(url.pathname)?.[1];
+  if (graphql !== undefined) return graphql;
+
+  const isApi =
+    (url.host === 'x.com' && url.pathname.startsWith('/i/api/')) || url.host === 'api.x.com';
+  if (!isApi) return undefined;
+
+  const segments = url.pathname.split('/').filter(Boolean);
+  const file = REST_FILE.exec(segments.at(-1) ?? '')?.[1];
+  if (file === undefined) return 'Rest';
+  const parent = segments.at(-2);
+  return parent !== undefined && ROUTE_WORD.test(parent)
+    ? `Rest_${parent}_${file}`
+    : `Rest_${file}`;
 }

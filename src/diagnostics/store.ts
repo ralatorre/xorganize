@@ -18,12 +18,20 @@ const DATABASE = 'xorganize-diagnostics';
 const OPERATIONS = 'operations';
 const ENVIRONMENT = 'environment';
 
+/**
+ * Raise this whenever the shape of a stored record changes. Records from an
+ * older version are discarded, not migrated: a report is cheap to collect again.
+ */
+const VERSION = 2;
+
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE, 1);
+    const request = indexedDB.open(DATABASE, VERSION);
     request.onupgradeneeded = () => {
-      request.result.createObjectStore(OPERATIONS, { keyPath: 'op' });
-      request.result.createObjectStore(ENVIRONMENT, { keyPath: 'page' });
+      const database = request.result;
+      for (const name of [...database.objectStoreNames]) database.deleteObjectStore(name);
+      database.createObjectStore(OPERATIONS, { keyPath: 'op' });
+      database.createObjectStore(ENVIRONMENT, { keyPath: 'page' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error('could not open database'));

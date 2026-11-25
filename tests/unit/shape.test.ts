@@ -85,25 +85,54 @@ describe('describeKeys', () => {
 describe('timelineStats', () => {
   it('counts entries and posts and checks the order', () => {
     expect(timelineStats(bookmarksResponse)).toEqual({
-      entries: 4,
-      entryIdPatterns: ['cursor-bottom-<n>', 'tweet-<n>'],
-      sortIndexDescending: true,
+      entries: 5,
+      entryIdPatterns: ['cursor-bottom-<n>', 'cursor-top-<n>', 'tweet-<n>'],
       tweetResults: 3,
+      postEntries: 3,
+      postSortIndexDescending: true,
+      sortIndexIsPostId: 0,
+      bookmarked: { yes: 3, no: 0 },
+      favorited: { yes: 0, no: 3 },
     });
   });
 
-  it('reports ascending order as not descending', () => {
-    const stats = timelineStats([
-      { entryId: 'tweet-1', sortIndex: '1' },
-      { entryId: 'tweet-2', sortIndex: '2' },
-    ]);
+  const postEntry = (id: string, sortIndex: string, wrapped = false) => {
+    const post = { rest_id: id, legacy: {} };
+    const result = wrapped ? { __typename: 'TweetWithVisibilityResults', tweet: post } : post;
+    return {
+      entryId: `tweet-${id}`,
+      sortIndex,
+      content: { itemContent: { tweet_results: { result } } },
+    };
+  };
+  const cursorEntry = (sortIndex: string) => ({ entryId: `cursor-top-${sortIndex}`, sortIndex });
 
-    expect(stats.sortIndexDescending).toBe(false);
+  it('judges order by post entries only, ignoring cursors', () => {
+    const stats = timelineStats([postEntry('1', '30'), postEntry('2', '20'), cursorEntry('99')]);
+
+    expect(stats.postSortIndexDescending).toBe(true);
+    expect(stats.postEntries).toBe(2);
+    expect(stats.entries).toBe(3);
   });
 
-  it('has no opinion on order with fewer than two entries', () => {
-    expect(timelineStats({ entryId: 'tweet-1', sortIndex: '1' }).sortIndexDescending).toBeNull();
-    expect(timelineStats({}).sortIndexDescending).toBeNull();
+  it('reports ascending order as not descending', () => {
+    const stats = timelineStats([postEntry('1', '20'), postEntry('2', '30')]);
+
+    expect(stats.postSortIndexDescending).toBe(false);
+  });
+
+  it('has no opinion on order with fewer than two post entries', () => {
+    expect(timelineStats([postEntry('1', '20'), cursorEntry('5')]).postSortIndexDescending).toBe(
+      null,
+    );
+    expect(timelineStats({}).postSortIndexDescending).toBeNull();
+  });
+
+  it('notices when the sort index is the post id, through a visibility wrapper too', () => {
+    const stats = timelineStats([postEntry('30', '30'), postEntry('20', '20', true)]);
+
+    expect(stats.sortIndexIsPostId).toBe(2);
+    expect(stats.tweetResults).toBe(2);
   });
 });
 
