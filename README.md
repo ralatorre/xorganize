@@ -37,7 +37,29 @@ What the container can and cannot do:
 - It cannot read or write `.git`, and cannot modify `container/`.
 - The browser tests load the built extension into headless Chromium and serve a stand-in page for x.com. They never contact the real site.
 
-To remove everything it created: `podman volume rm xorganize-node-modules` and `podman image prune`.
+### Using the extension by hand
+
+`container/browse` runs a real browser with the extension loaded, still inside a container, and shows it in a tab of your own browser.
+
+```
+container/run pnpm build            # or: pnpm build:diagnostics
+container/browse                    # or: container/browse --diagnostics
+```
+
+It prints an address on `127.0.0.1` with a one-time password. Open it, and you are looking at the container's browser.
+
+- The viewer's port is open only on your machine, and each session has a new password.
+- This container has network access, because it has to reach x.com. It sees the built extension (read-only), its own browser profile, and the `diagnostics/` folder for downloads. It does not see the rest of the project.
+- The browser's own sandbox stays on, and it is started as an ordinary browser with no automation flags.
+- The profile, including any login, lives in the Podman volume `xorganize-browser-profile`. No other command mounts it. `container/browse --forget` deletes it.
+
+### Diagnostics build
+
+The extension depends on undocumented behaviour of x.com. The diagnostics build records the **structure** of the responses X sends (key names, value types, counts, schema names) so that the project's assumptions can be checked against real traffic. It does not record post text, handles, IDs, cookies or tokens, and tests assert that. The report is saved as a file from the library page; read it before sharing it. The diagnostics build is never published.
+
+### Cleaning up
+
+To remove everything these commands created: `podman volume rm xorganize-node-modules xorganize-browser-profile` and `podman image prune`.
 
 ## Licence
 

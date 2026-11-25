@@ -1,23 +1,30 @@
 import { test as base, chromium, type BrowserContext, type Worker } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
-export const extensionPath = fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url));
+export type Build = 'chrome-mv3' | 'chrome-mv3-diagnostics';
+
+export function buildPath(build: Build): string {
+  return fileURLToPath(new URL(`../../.output/${build}`, import.meta.url));
+}
 
 interface ExtensionFixtures {
+  /** Which built extension to load. Set per file with `test.use({ build })`. */
+  build: Build;
   context: BrowserContext;
   serviceWorker: Worker;
   extensionId: string;
 }
 
-/** A fresh browser profile per test, with the built extension loaded. */
+/** A fresh browser profile per test, with a built extension loaded. */
 export const test = base.extend<ExtensionFixtures>({
-  // Playwright requires the first argument to be an object destructuring pattern.
-  // eslint-disable-next-line no-empty-pattern
-  context: async ({}, use) => {
+  build: ['chrome-mv3', { option: true }],
+
+  context: async ({ build }, use) => {
+    const path = buildPath(build);
     const context = await chromium.launchPersistentContext('', {
       // The full Chromium build: its headless mode supports extensions.
       channel: 'chromium',
-      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
+      args: [`--disable-extensions-except=${path}`, `--load-extension=${path}`],
     });
     await use(context);
     await context.close();

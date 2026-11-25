@@ -201,7 +201,19 @@ Rules for this file:
 - It must never throw into the page and never change what the page receives. All work is inside `try`/`catch`, and the original return values are passed through untouched.
 - It never reads or forwards request headers. Authorisation and CSRF headers never leave the page context.
 - It stays dependency-free and under roughly 150 lines, so that it can be audited at a glance.
-- It leaves nothing behind that the page can observe: no globals, no DOM changes, no messages. One limit is unavoidable and stated plainly: reading responses means wrapping two of the page's own functions, and a site that goes looking can detect that a function has been wrapped. M1 will make the wrappers as close to the originals as it can, and will document what remains detectable.
+- It leaves nothing behind that the page can observe: no globals, no DOM changes, no messages, no unhandled rejections. A browser test loads a page that records all of these and asserts it sees nothing, and that every response and error reaches the page unchanged.
+- The wrappers are proxies of the native functions, installed with the original property flags. They therefore keep the original `name` and `length`, and print as native code. Everything they rely on (`Reflect.apply`, `Promise.prototype.then`, the response and request accessors, `addEventListener`) is captured before any page script runs, so a page that later replaces those built-ins neither breaks the wrappers nor sees them at work.
+
+What remains detectable, stated plainly, because reading responses requires wrapping page functions at all:
+
+| Trace | Detail |
+| --- | --- |
+| Printed source | A wrapped function prints as `function () { [native code] }`, without its name. A site that compares against the exact native string can tell. |
+| Identity | `window.fetch` is no longer the same object as the `fetch` of a freshly created iframe. |
+| Stack traces | An error thrown synchronously inside a wrapped call has one extra frame, which names the extension's script URL and so its ID. |
+| Built-ins used during a call | A few ordinary methods (`URL` parsing, string methods) are called while a request is examined. A page that replaces those could notice the calls. |
+
+None of these is exposed by ordinary site code; each needs the site to look for it deliberately. They are accepted, and revisited if X is seen to act on them.
 
 ### 7.2 Bridge (ISOLATED world)
 
@@ -549,7 +561,8 @@ CI never logs in to X and holds no X credentials.
 ## 15. Build, CI and release
 
 - **Development environment:** every command runs inside a Podman container through `container/run`. The container sees only the project directory, has no network unless `--net` is passed (needed only to install dependencies), keeps `node_modules` in a volume, and cannot read `.git` or modify `container/`. Tool versions are pinned exactly in `package.json`, and the image is built from them.
-- **Scripts:** `dev`, `dev:firefox`, `build`, `build:firefox`, `zip`, `typecheck`, `lint`, `test`, `test:e2e`, and `check`, which runs all of the verification steps in order.
+- **Using the extension by hand:** `container/browse` runs Chromium with the built extension in a second container and shows it in a tab of the maintainer's own browser, through a viewer on a `127.0.0.1` port with a one-time password per session. That container has network access, sees only the built extension (read-only), its own profile volume and a downloads folder, keeps Chromium's sandbox on, and starts the browser with no automation flags. The profile volume, which holds any login, is mounted by no other command.
+- **Scripts:** `dev`, `dev:firefox`, `build`, `build:firefox`, `build:diagnostics`, `zip`, `typecheck`, `lint`, `test`, `test:e2e`, and `check`, which runs all of the verification steps in order.
 - **CI (GitHub Actions):** on every pull request and push to `main`, run `check` in the same container as local development: typecheck, lint, unit tests, a build for both browsers, and the end-to-end suite on Chromium. Run a secret scanner (gitleaks) over the history. Actions are pinned to commit hashes.
 - **Releases:** a version tag builds both zips and attaches them to a GitHub release. Store submission is manual at first.
 - **Versioning:** semantic versioning. The changelog flags any release that includes a database migration.
@@ -584,6 +597,8 @@ Later candidates: Markdown export, optional encrypted sync, saved searches, Fire
 ## 18. Assumptions to verify in M1
 
 Each of these is from observed behaviour and has not been confirmed for this spec.
+
+**How they are verified.** A separate diagnostics build (`pnpm build:diagnostics`, loaded with `container/browse --diagnostics`) observes every GraphQL response on x.com and records only its structure: key paths, value types, counts, the values of a few schema keys such as `__typename` when they look like identifiers, and entry-ID patterns reduced to known words and placeholders. It also records how many elements each planned selector matches and whether the account cookie has the expected format. It never records post text, handles, IDs, cookies or tokens; unit and browser tests feed it marked fixture data and assert none of it reaches the report. The report is saved from the library page as a JSON file, which the maintainer can read in full before sharing. The diagnostics code is removed from production builds at build time, and a test checks that.
 
 1. The web client calls `/i/api/graphql/<id>/<OperationName>` and the operation names in 7.3 are current.
 2. Which of `fetch` and `XMLHttpRequest` the client uses for these calls. The interceptor wraps both regardless.

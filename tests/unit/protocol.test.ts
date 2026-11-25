@@ -35,3 +35,37 @@ describe('runtime messages', () => {
     },
   );
 });
+
+describe('response messages', () => {
+  const valid = {
+    v: 1,
+    kind: 'response',
+    op: 'Bookmarks',
+    transport: 'xhr',
+    host: 'x.com',
+    method: 'GET',
+    status: 200,
+    body: '{}',
+  };
+
+  it('accepts a well-formed response, with or without the optional fields', () => {
+    expect(isBridgeMessage(valid)).toBe(true);
+    expect(isBridgeMessage({ ...valid, variables: '{}', requestBody: '{}' })).toBe(true);
+  });
+
+  it.each([
+    ['an operation name with other characters', { op: 'Book marks' }],
+    ['an empty operation name', { op: '' }],
+    ['an overlong operation name', { op: 'x'.repeat(65) }],
+    ['an unknown transport', { transport: 'beacon' }],
+    ['a host with a path', { host: 'x.com/evil' }],
+    ['a lower-case method', { method: 'get' }],
+    ['a non-integer status', { status: 200.5 }],
+    ['a non-string body', { body: {} }],
+    ['an oversized body', { body: 'x'.repeat(8 * 1024 * 1024 + 1) }],
+    ['oversized variables', { variables: 'x'.repeat(64 * 1024 + 1) }],
+    ['a non-string request body', { requestBody: 1 }],
+  ])('rejects %s', (_label, change) => {
+    expect(isBridgeMessage({ ...valid, ...change })).toBe(false);
+  });
+});

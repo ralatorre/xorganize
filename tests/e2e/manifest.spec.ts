@@ -1,13 +1,15 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { expect, extensionPath, test } from './fixtures';
+import { buildPath, expect, test } from './fixtures';
 
 // This test is the gate for least privilege. If it fails because the manifest
 // grew, the new key or permission needs a reason written down in docs/SPEC.md
 // before the expectation here is changed.
 
 test('manifest requests the bare minimum', async () => {
-  const manifest = JSON.parse(await readFile(join(extensionPath, 'manifest.json'), 'utf8'));
+  const manifest = JSON.parse(
+    await readFile(join(buildPath('chrome-mv3'), 'manifest.json'), 'utf8'),
+  );
 
   expect(Object.keys(manifest).sort()).toEqual([
     'action',
@@ -50,4 +52,29 @@ test('manifest requests the bare minimum', async () => {
     expect(script.all_frames).toBeUndefined();
   }
   expect(scripts.filter((script) => script.world === 'MAIN')).toHaveLength(1);
+});
+
+test('production build contains no diagnostics code', async () => {
+  const root = buildPath('chrome-mv3');
+  const files = (await readdir(root, { recursive: true })).filter((name) =>
+    /\.(js|html)$/.test(name),
+  );
+  expect(files.length).toBeGreaterThan(3);
+
+  for (const name of files) {
+    const text = await readFile(join(root, name), 'utf8');
+    expect(text, name).not.toContain('diagnostics/');
+    expect(text, name).not.toContain('xorganize-diagnostics');
+    expect(text, name).not.toContain('Save report');
+  }
+});
+
+test('diagnostics build asks for nothing more than production', async () => {
+  const read = async (build: 'chrome-mv3' | 'chrome-mv3-diagnostics') =>
+    JSON.parse(await readFile(join(buildPath(build), 'manifest.json'), 'utf8'));
+  const production = await read('chrome-mv3');
+  const diagnostics = await read('chrome-mv3-diagnostics');
+
+  expect(diagnostics.name).toBe('xorganize (diagnostics)');
+  expect({ ...diagnostics, name: production.name }).toEqual(production);
 });

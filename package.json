@@ -14,13 +14,14 @@
     "dev:firefox": "wxt -b firefox --mv3",
     "build": "wxt build",
     "build:firefox": "wxt build -b firefox --mv3",
+    "build:diagnostics": "wxt build --mode diagnostics",
     "zip": "wxt zip",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm build:firefox && pnpm test:e2e",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm build:firefox && pnpm build:diagnostics && pnpm test:e2e",
     "postinstall": "wxt prepare"
   },
   "dependencies": {

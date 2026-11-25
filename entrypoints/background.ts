@@ -1,5 +1,9 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
+import { DIAGNOSTICS } from '@/src/build';
+import type { EnvironmentObservation } from '@/src/diagnostics/environment';
+import type { OperationObservation } from '@/src/diagnostics/observe';
+import { recordEnvironment, recordOperation } from '@/src/diagnostics/store';
 import { isSupportedUrl } from '@/src/hosts';
 import { isRuntimeMessage } from '@/src/messaging/protocol';
 
@@ -17,6 +21,24 @@ export default defineBackground(() => {
     if (sender.id !== browser.runtime.id || sender.frameId !== 0) return;
     if (!isSupportedUrl(sender.url) || !isRuntimeMessage(message)) return;
 
-    sendResponse({ ok: true });
+    if (message.type === 'content/ready') {
+      sendResponse({ ok: true });
+      return;
+    }
+
+    if (DIAGNOSTICS) {
+      const { payload } = message;
+      const stored =
+        message.type === 'diagnostics/operation' && typeof payload.op === 'string'
+          ? recordOperation(payload as unknown as OperationObservation)
+          : message.type === 'diagnostics/environment' && typeof payload.page === 'string'
+            ? recordEnvironment(payload as unknown as EnvironmentObservation)
+            : Promise.reject(new Error('malformed diagnostics message'));
+      stored.then(
+        () => sendResponse({ ok: true }),
+        () => sendResponse({ ok: false }),
+      );
+      return true; // respond asynchronously
+    }
   });
 });

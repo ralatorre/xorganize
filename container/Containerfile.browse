@@ -1,0 +1,12 @@
+# Adds a virtual screen and a browser-based viewer to the development image, so
+# the extension can be used by hand in a real browser that still runs inside a
+# container. Built and used through container/browse.
+
+ARG BASE
+FROM ${BASE}
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends xvfb x11vnc novnc websockify \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --chmod=0755 browse-session /usr/local/bin/browse-session

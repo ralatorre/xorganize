@@ -1,3 +1,6 @@
+import { DIAGNOSTICS } from '@/src/build';
+import { Diagnostics } from './Diagnostics';
+
 export function App() {
   return (
     <main class="library">
@@ -11,6 +14,7 @@ export function App() {
         </p>
         <p class="library__note">Capture is not available in this build yet.</p>
       </section>
+      {DIAGNOSTICS ? <Diagnostics /> : null}
     </main>
   );
 }

@@ -14,13 +14,13 @@ set -euo pipefail
 
 usage() {
   sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-  cat <<'EOF'
+  cat <<'USAGE'
 
 Options:
   --net        allow network access for this command
   --rebuild    rebuild the development image first
   -h, --help   show this help
-EOF
+USAGE
 }
 
 network=(--network=none)
@@ -40,27 +40,8 @@ if (($# == 0)); then
   exit 2
 fi
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-manifest="$root/package.json"
-
-pnpm_version="$(sed -nE 's/.*"packageManager": *"pnpm@([0-9][^"+]*).*/\1/p' "$manifest")"
-playwright_version="$(sed -nE 's/.*"@playwright\/test": *"([0-9][^"]*)".*/\1/p' "$manifest")"
-if [[ -z "$pnpm_version" || -z "$playwright_version" ]]; then
-  echo "container/run: package.json must pin exact versions of pnpm (packageManager) and @playwright/test" >&2
-  exit 1
-fi
-
-recipe="$(sha256sum "$root/container/Containerfile" | cut -c1-8)"
-image="localhost/xorganize-dev:pnpm${pnpm_version}-pw${playwright_version}-${recipe}"
-
-if ((rebuild)) || ! podman image exists "$image"; then
-  podman build \
-    --build-arg "PNPM_VERSION=$pnpm_version" \
-    --build-arg "PLAYWRIGHT_VERSION=$playwright_version" \
-    --tag "$image" \
-    --file "$root/container/Containerfile" \
-    "$root/container" >&2
-fi
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+ensure_dev_image "$rebuild"
 
 tty=()
 if [[ -t 0 && -t 1 ]]; then
@@ -81,4 +62,4 @@ exec podman run --rm "${tty[@]}" \
   --mount type=tmpfs,destination=/work/.git,notmpcopyup \
   --volume xorganize-node-modules:/work/node_modules:U \
   --workdir /work \
-  "$image" "$@"
+  "$dev_image" "$@"

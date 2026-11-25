@@ -1,0 +1,18 @@
+/**
+ * Every selector the extension uses on x.com. These depend on the site's
+ * markup, which changes without notice, so they live in one place.
+ */
+export const SELECTORS = {
+  primaryColumn: '[data-testid="primaryColumn"]',
+  post: 'article[data-testid="tweet"]',
+  postText: '[data-testid="tweetText"]',
+  postAuthor: '[data-testid="User-Name"]',
+  postPermalinkTime: 'a[href*="/status/"] time[datetime]',
+  postActionBar: 'article[data-testid="tweet"] [role="group"]',
+  bookmarkButton: '[data-testid="bookmark"]',
+  removeBookmarkButton: '[data-testid="removeBookmark"]',
+  likeButton: '[data-testid="like"]',
+  unlikeButton: '[data-testid="unlike"]',
+} as const;
+
+export type SelectorName = keyof typeof SELECTORS;
