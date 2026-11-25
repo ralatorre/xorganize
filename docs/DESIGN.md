@@ -91,7 +91,7 @@ Behaviour:
 
 - The input is focused on open. Existing tags are shown as removable chips.
 - Typing filters existing tags, ranked by prefix match and then by use count. The last row always offers to create the typed name if it does not exist.
-- `Enter` applies the highlighted suggestion. `Up` / `Down` move the highlight. `Backspace` on an empty input removes the last chip. `Esc` or a click outside closes the popover.
+- `Enter` applies the highlighted suggestion. Pressed before the suggestions for the typed text have arrived, it waits for them and applies the best match, so a few letters and `Enter` pick the existing tag. `Up` / `Down` move the highlight. `Backspace` on an empty input removes the last chip. `Esc` or a click outside closes the popover.
 - Every change is saved immediately. There is no Save button.
 - "Recent" shows the last five tags used, for one-click tagging.
 - Tag names are trimmed, with runs of spaces inside them made single, lower-cased for comparison, and limited to 50 characters. Invisible characters are not allowed, so two tags cannot look the same. A semicolon is not allowed, because it separates tags in CSV exports. The display keeps the casing of first creation.

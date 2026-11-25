@@ -1,5 +1,6 @@
 import type { SourceKind } from '@/src/capture/operations';
 import type { Counts } from '@/src/db/types';
+import { themeOfColour } from '@/src/dom/theme';
 
 /**
  * A small status line shown on x.com after posts are captured, so the user
@@ -35,6 +36,8 @@ export interface Banner {
   show(source: SourceKind, counts: Counts): void;
   /** Says plainly that posts could not be saved, so a failure is never silent. */
   fail(): void;
+  /** Any other short message. */
+  say(text: string): void;
 }
 
 export function createBanner(): Banner {
@@ -86,13 +89,13 @@ export function createBanner(): Banner {
     fail() {
       display('xorganize · could not save these posts. Reload the page, or restart the browser.');
     },
+    say(text) {
+      display(`xorganize · ${text}`);
+    },
   };
 }
 
 /** Whether the page currently has a dark background, so the banner can contrast with it. */
 function pageIsDark(): boolean {
-  const channels = getComputedStyle(document.body).backgroundColor.match(/\d+(\.\d+)?/g);
-  if (!channels || channels.length < 3) return false;
-  const [red, green, blue] = channels.map(Number) as [number, number, number];
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue < 128;
+  return themeOfColour(getComputedStyle(document.body).backgroundColor) !== 'light';
 }

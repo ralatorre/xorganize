@@ -346,7 +346,15 @@ Runs in the content script, only on a source timeline page, and only after the u
 
 ## 8. Injected UI
 
-**Built so far:** a status line (`entrypoints/x.content/banner.ts`). After each captured page of bookmarks or likes it shows the account's running total for that source, at the bottom centre of the window, and hides when the address changes. It lives in a closed shadow root with a constructed stylesheet, takes no input (`pointer-events: none`), and is given its text with `textContent`. It is the only thing the extension adds to the page, and is visible to the page by design. The rest of this section describes what is still to come.
+**Built so far:**
+
+- **Status line** (`entrypoints/x.content/banner.ts`). After each captured page of bookmarks or likes it shows the account's running total for that source, at the bottom centre of the window, and hides when the address changes. It also reports a tag change that could not be saved. It lives in a closed shadow root with a constructed stylesheet, takes no input (`pointer-events: none`), and is given its text with `textContent`.
+- **Tag button** (`entrypoints/x.content/inline/tag-button.ts`), one per post, placed just before the element holding X's bookmark button, or at the end of the action bar when there is none. A post's ID comes from its own permalink, the first status link around a timestamp (`postIdOf` in `src/dom/post-from-page.ts`); adverts have none, so they get no button. Buttons appear only while an account is signed in.
+- **Tag popover** (`entrypoints/x.content/inline/popover.tsx`, Preact), one per tab. Its behaviour is in pure functions in `src/inline/` (`popover-model.ts`, `position.ts`). If Enter is pressed before the suggestions for the typed text have arrived, they are fetched first and the best match applied, so typing a few letters and pressing Enter uses the existing tag instead of creating a new one from those letters. The popover's host is removed from the page when it closes.
+- **Tag state** (`src/inline/tag-state.ts`): tags of the posts on screen, requested in one batch per task, kept current through the `tags` port (`src/inline/tags-port.ts`). Changes are optimistic and put back if the worker refuses them (`src/inline/tagger.ts`).
+- **Keeping input from the page** (`src/inline/keyboard-guard.ts`). Key, input, composition and clipboard events are composed: they leave a shadow root and travel through the page, retargeted to the host. So the page could read what is typed into the popover, and X's single-key shortcuts would fire while typing. A capture listener on `window`, added at `document_start` before any page script, stops these events when they are aimed at an extension host and hands them to that host's handler. Stopping propagation does not prevent the default action, so typing still types. Pointer events are stopped at the host as they bubble out, so a click on the tag button does not also open the post. What the page can still see: that the pointer went down on a host, and the Alt key of the Alt+T shortcut, which goes down while focus is still on X's post.
+
+The rest of this section describes the design. Where it differs from what is built, what is built is described above.
 
 - **Mounting.** One shadow root per injected control, with styles adopted through a shared constructable stylesheet. A single `MutationObserver` on the primary column finds new `article[data-testid="tweet"]` elements and mounts a tag button into the action bar (the `[role="group"]` row, before the element containing `[data-testid="bookmark"]` or `[data-testid="removeBookmark"]`). The observer callback is batched with `requestAnimationFrame`.
 - **Recycling.** X virtualises its timeline and reuses DOM nodes. Each mount is tagged with the post ID it was created for and is re-bound when that changes.
@@ -356,7 +364,7 @@ Runs in the content script, only on a source timeline page, and only after the u
 - **Theme.** Tokens are chosen from the computed background colour of `body`, re-evaluated when its `style` attribute changes.
 - **Failure.** If the action bar cannot be found for a post, that post is skipped. After repeated failures across a session, the content script reports `inline-ui-degraded` to the service worker, which surfaces it in the popup.
 
-All selectors live in `entrypoints/x.content/dom/selectors.ts` so that a layout change is a one-file fix.
+All selectors live in `src/dom/selectors.ts` so that a layout change is a one-file fix.
 
 ## 9. Data model
 
@@ -556,7 +564,8 @@ Fixtures in `tests/fixtures/` are **hand-written or generated, never copied from
 
 | Risk | Mitigation |
 | --- | --- |
-| The site detects that the extension is installed | No `window.postMessage`, no web-accessible resources, no DOM changes or globals from the capture scripts, and a channel the page cannot observe (7.2). Covered by an automated test. Known limits: wrapped functions can be detected by a site that looks for them (7.1), and the tag button is visible in the DOM by design. |
+| The site detects that the extension is installed | No `window.postMessage`, no web-accessible resources, no DOM changes or globals from the capture scripts, and a channel the page cannot observe (7.2). Covered by an automated test. Known limits: wrapped functions can be detected by a site that looks for them (7.1), and the tag button's host element is visible in the DOM by design. |
+| The site reads what the user types into the extension's controls | Key, input and clipboard events aimed at an extension host are stopped on the window before any page listener, and handled by the extension (section 8). Controls are in closed shadow roots, and the popover is removed when it closes. Covered by an automated test with a page that listens as early and widely as it can. |
 | The page forges or reads bridge messages | The channel's event names come from a random ID the page never sees (7.2). Payloads are still schema-validated, with size caps and numeric-string checks on every ID. Worst case is junk posts in the user's own library. |
 | A web page or another extension messages this one | No external message listeners and no `externally_connectable`. The worker accepts runtime messages only from its own ID, from the top frame, on `https://x.com`. |
 | Stored content used for script injection | All text is rendered as text nodes. No `innerHTML`, no `dangerouslySetInnerHTML`. Lint rule enforces this. |
@@ -613,7 +622,7 @@ The repository is public, so the following never get committed:
 | --- | --- | --- |
 | M0 Skeleton | WXT project, both content scripts, service worker, empty library page, CI. | The extension loads and CI is green. |
 | M1 Capture | Interceptor, bridge, extraction, normalisation, database, account detection, capture banner without auto-scroll, for both the Bookmarks and Likes timelines. Verify every assumption in section 18. | Scrolling the Bookmarks page and the Likes tab fills the database, confirmed against a real free account. |
-| M2 Tagging | Tag button, popover, seen cache, DOM fallback, tag messages. | A post can be tagged from any timeline and the state survives a reload. |
+| M2 Tagging | Tag button, popover, seen cache, DOM fallback, tag messages. **Built**, to be confirmed against a real account. | A post can be tagged from any timeline and the state survives a reload. |
 | M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. Avatars and thumbnails were brought forward and are done. | A tagged post can be found by tag and by text. |
 | M4 Export | JSON and CSV export for the whole library and the current view, import with merge and replace, backup reminder, delete all. | Export then import into a clean profile reproduces the library, and a single tag can be exported to CSV. |
 | M5 Live capture | Bookmark and like mutations, tag prompt toast, auto-scroll. | Bookmarking or liking a post anywhere adds it without visiting the Bookmarks or Likes page. |
@@ -639,6 +648,8 @@ Each of these is from observed behaviour and has not been confirmed for this spe
 10. Firefox behaviour for MAIN-world content scripts and the fallback when no side panel is available. In particular, whether both content scripts start before any page script there, which the private channel's handshake (7.2) depends on. This is tested for Chromium only.
 11. Whether the library can be evicted under storage pressure without `unlimitedStorage`, and whether `navigator.storage.persist()` prevents it (6.1).
 12. How closely the `fetch` and `XMLHttpRequest` wrappers can be made to match the originals, and what remains detectable (7.1).
+13. (M2) The tag button sits correctly in the action bar of timeline posts, the focused post on a post page, and replies, and X's re-rendering neither removes it for long nor duplicates it.
+14. (M2) X gives posts keyboard focus (with `j` and `k`), so that Alt+T finds the focused post; and the popover's keys never trigger X's shortcuts.
 
 ### 18.1 Results so far
 
