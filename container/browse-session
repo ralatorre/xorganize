@@ -29,6 +29,12 @@ chrome="$(ls -d /opt/playwright/chromium-*/chrome-linux*/chrome | head -1)"
 # A lock left behind by a session that was killed would stop the browser starting.
 rm -f /profile/Singleton*
 
+# A saved profile keeps a copy of the extension's background worker and goes on
+# running it after the files in /extension change, even across a version bump.
+# Dropping the profile's worker cache makes the browser load the current one.
+# Sites' own workers are re-registered on the next visit; logins are not here.
+rm -rf "/profile/Default/Service Worker"
+
 # Chromium's own sandbox stays on. Nothing here drives the browser: it is
 # started as an ordinary browser, with no automation flags. The browser's own
 # background requests (updates, sync, reporting) are switched off.

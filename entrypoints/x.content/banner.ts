@@ -33,6 +33,8 @@ const STYLES = `
 
 export interface Banner {
   show(source: SourceKind, counts: Counts): void;
+  /** Says plainly that posts could not be saved, so a failure is never silent. */
+  fail(): void;
 }
 
 export function createBanner(): Banner {
@@ -61,21 +63,28 @@ export function createBanner(): Banner {
     watcher = undefined;
   };
 
+  const display = (text: string) => {
+    line ??= mount();
+    line.textContent = text;
+    line.dataset.theme = pageIsDark() ? 'dark' : 'light';
+    line.hidden = false;
+
+    // The line belongs to the page it was shown on. x.com changes page without
+    // reloading, so watch the address and hide when it moves on.
+    shownOn = location.pathname;
+    watcher ??= setInterval(() => {
+      if (location.pathname !== shownOn) hide();
+    }, 1000);
+  };
+
   return {
     show(source, counts) {
-      line ??= mount();
       const count = source === 'bookmark' ? counts.bookmarks : counts.likes;
       const noun = source === 'bookmark' ? 'bookmark' : 'like';
-      line.textContent = `xorganize · ${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'} captured`;
-      line.dataset.theme = pageIsDark() ? 'dark' : 'light';
-      line.hidden = false;
-
-      // The count belongs to the page it was captured on. x.com changes page
-      // without reloading, so watch the address and hide when it moves on.
-      shownOn = location.pathname;
-      watcher ??= setInterval(() => {
-        if (location.pathname !== shownOn) hide();
-      }, 1000);
+      display(`xorganize · ${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'} captured`);
+    },
+    fail() {
+      display('xorganize · could not save these posts. Reload the page, or restart the browser.');
     },
   };
 }

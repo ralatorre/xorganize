@@ -32,6 +32,7 @@ export default defineContentScript({
       viewerId: () => viewerIdFromCookie(document.cookie),
       send: (message) => send<CaptureReply>(message),
       onCaptured: (source, counts) => banner.show(source, counts),
+      onFailed: () => banner.fail(),
     });
 
     let environmentProbe: ReturnType<typeof setTimeout> | undefined;

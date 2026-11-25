@@ -20,6 +20,8 @@ export interface CaptureEnvironment {
   send(message: CaptureMessage): Promise<CaptureReply | undefined>;
   /** Called after posts were stored, with the account's new totals. */
   onCaptured(source: SourceKind, counts: Counts): void;
+  /** Called when the worker did not store what it was sent. Never silent. */
+  onFailed(): void;
 }
 
 export function createCapture(environment: CaptureEnvironment) {
@@ -28,6 +30,7 @@ export function createCapture(environment: CaptureEnvironment) {
   const store = async (message: CaptureMessage, source: SourceKind) => {
     const reply = await environment.send(message).catch(() => undefined);
     if (reply?.ok) environment.onCaptured(source, reply.counts);
+    else environment.onFailed();
   };
 
   const onMutation = async (message: ResponseMessage, body: Record<string, unknown>) => {

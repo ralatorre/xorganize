@@ -17,6 +17,7 @@ const VIEWER = '9000000000000000001';
 function setup(options: { viewerId?: string | undefined; reply?: CaptureReply | undefined } = {}) {
   const sent: CaptureMessage[] = [];
   const captured: Array<[string, { bookmarks: number; likes: number }]> = [];
+  const failures: string[] = [];
   const viewerId = 'viewerId' in options ? options.viewerId : VIEWER;
   const reply =
     'reply' in options ? options.reply : { ok: true, counts: { bookmarks: 3, likes: 1 } };
@@ -27,8 +28,9 @@ function setup(options: { viewerId?: string | undefined; reply?: CaptureReply | 
       return reply as CaptureReply | undefined;
     },
     onCaptured: (source, counts) => captured.push([source, counts]),
+    onFailed: () => failures.push('failed'),
   });
-  return { capture, sent, captured };
+  return { capture, sent, captured, failures };
 }
 
 function response(
@@ -147,14 +149,26 @@ describe('source timelines', () => {
     expect(sent).toEqual([]);
   });
 
-  it('does not report totals when the worker fails or does not answer', async () => {
+  it('says so, and reports no totals, when the worker fails or does not answer', async () => {
     for (const reply of [{ ok: false } as const, undefined]) {
-      const { capture, captured } = setup({ reply });
+      const { capture, captured, failures } = setup({ reply });
 
       await capture(response('Bookmarks', bookmarksPage));
+      await capture(mutation('DeleteBookmark', '102'));
 
       expect(captured).toEqual([]);
+      expect(failures).toEqual(['failed', 'failed']);
     }
+  });
+
+  it('reports no failure when things work, or when there was nothing to store', async () => {
+    const { capture, failures } = setup();
+
+    await capture(response('Bookmarks', bookmarksPage));
+    await capture(response('HomeTimeline', bookmarksPage));
+    await capture(response('Bookmarks', bookmarksTimeline([cursorEntry('bottom', '1')])));
+
+    expect(failures).toEqual([]);
   });
 });
 

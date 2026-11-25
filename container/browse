@@ -89,8 +89,12 @@ Press Ctrl+C here, or close the browser window inside the viewer, to stop.
 
 MESSAGE
 
+# One session per profile. The default profile's container keeps the plain name.
+name=xorganize-browse
+[[ "$profile" == xorganize-browser-profile ]] || name="xorganize-browse-$profile"
+
 exec podman run --rm --init \
-  --name xorganize-browse \
+  --name "$name" \
   --userns=keep-id \
   --user "$(id -u):$(id -g)" \
   --cap-drop=all \
