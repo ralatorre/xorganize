@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Runs a command inside the project's development container.
+#
+#   container/run --net pnpm install     install dependencies (needs the network)
+#   container/run pnpm check             typecheck, lint, test and build, offline
+#   container/run bash                   interactive shell
+#
+# The container sees only this project directory. It has no network unless
+# --net is given, no access to the home directory, and cannot write to .git
+# or to this container/ directory. Dependencies live in a podman volume, not
+# on the host.
+
+set -euo pipefail
+
+usage() {
+  sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+
+Options:
+  --net        allow network access for this command
+  --rebuild    rebuild the development image first
+  -h, --help   show this help
+EOF
+}
+
+network=(--network=none)
+rebuild=0
+while (($#)); do
+  case "$1" in
+    --net) network=(); shift ;; # podman's default rootless networking
+    --rebuild) rebuild=1; shift ;;
+    -h | --help) usage; exit 0 ;;
+    --) shift; break ;;
+    *) break ;;
+  esac
+done
+
+if (($# == 0)); then
+  usage >&2
+  exit 2
+fi
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+manifest="$root/package.json"
+
+pnpm_version="$(sed -nE 's/.*"packageManager": *"pnpm@([0-9][^"+]*).*/\1/p' "$manifest")"
+playwright_version="$(sed -nE 's/.*"@playwright\/test": *"([0-9][^"]*)".*/\1/p' "$manifest")"
+if [[ -z "$pnpm_version" || -z "$playwright_version" ]]; then
+  echo "container/run: package.json must pin exact versions of pnpm (packageManager) and @playwright/test" >&2
+  exit 1
+fi
+
+recipe="$(sha256sum "$root/container/Containerfile" | cut -c1-8)"
+image="localhost/xorganize-dev:pnpm${pnpm_version}-pw${playwright_version}-${recipe}"
+
+if ((rebuild)) || ! podman image exists "$image"; then
+  podman build \
+    --build-arg "PNPM_VERSION=$pnpm_version" \
+    --build-arg "PLAYWRIGHT_VERSION=$playwright_version" \
+    --tag "$image" \
+    --file "$root/container/Containerfile" \
+    "$root/container" >&2
+fi
+
+tty=()
+if [[ -t 0 && -t 1 ]]; then
+  tty=(--interactive --tty)
+fi
+
+exec podman run --rm "${tty[@]}" \
+  --userns=keep-id \
+  --user "$(id -u):$(id -g)" \
+  --cap-drop=all \
+  --security-opt=no-new-privileges \
+  "${network[@]}" \
+  --shm-size=1g \
+  --tmpfs /home/dev:rw,mode=1777 \
+  --env HOME=/home/dev \
+  --volume "$root:/work:z" \
+  --volume "$root/container:/work/container:ro" \
+  --mount type=tmpfs,destination=/work/.git,notmpcopyup \
+  --volume xorganize-node-modules:/work/node_modules:U \
+  --workdir /work \
+  "$image" "$@"
