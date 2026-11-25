@@ -1,0 +1,29 @@
+# Keeps every dependency on its latest release (CONTRIBUTING, "Latest versions").
+# Each update is a pull request, checked like a new dependency before merging.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: daily
+    versioning-strategy: increase
+    groups:
+      # Minor and patch updates in one pull request; each major on its own.
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # TypeScript 7 is skipped.
+      - dependency-name: typescript
+        versions: ['7.x']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+
+  # The development image's Node base (container/Containerfile).
+  - package-ecosystem: docker
+    directory: /container
+    schedule:
+      interval: daily

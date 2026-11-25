@@ -1,7 +1,7 @@
 # Development image: Node, pnpm, and the Chromium build that Playwright drives.
 # Built and used through container/run. Nothing here is shipped in the extension.
 
-FROM docker.io/library/node:24-bookworm-slim
+FROM docker.io/library/node:26-trixie-slim
 
 # Both versions are read from package.json by container/run, so that file stays
 # the single place where tool versions are pinned.

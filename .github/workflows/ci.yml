@@ -15,7 +15,7 @@ concurrency:
 jobs:
   check:
     name: Typecheck, lint, test, build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -26,12 +26,15 @@ jobs:
       - name: Install dependencies
         run: container/run --net pnpm install --frozen-lockfile
 
+      - name: Audit dependencies
+        run: container/run --net pnpm audit
+
       - name: Check (offline)
         run: container/run pnpm check
 
   secrets:
     name: Secret scan
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read

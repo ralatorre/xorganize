@@ -7,7 +7,7 @@
   "type": "module",
   "packageManager": "pnpm@12.23.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=26"
   },
   "scripts": {
     "dev": "wxt",
@@ -32,7 +32,7 @@
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.65.1",
     "@preact/preset-vite": "2.10.6",
-    "@types/node": "24.19.2",
+    "@types/node": "26.6.7",
     "eslint": "10.15.0",
     "eslint-config-prettier": "10.1.8",
     "fake-indexeddb": "6.2.8",
