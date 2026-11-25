@@ -11,7 +11,7 @@
  * - timeline entry ids, reduced to a pattern of known words and placeholders.
  */
 
-import { isRecord } from '@/src/messaging/protocol';
+import { isRecord } from '@/src/guards';
 
 export interface ShapeSummary {
   /** Key path -> sorted type names seen there. */

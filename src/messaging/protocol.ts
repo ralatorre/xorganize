@@ -10,6 +10,12 @@
  */
 
 import { DIAGNOSTICS } from '@/src/build';
+import { isCapturedPost, type CapturedPost } from '@/src/capture/normalise';
+import type { SourceKind } from '@/src/capture/operations';
+import type { Counts } from '@/src/db/types';
+import { isId, isRecord } from '@/src/guards';
+
+export { isRecord };
 
 export const BRIDGE_VERSION = 1;
 
@@ -87,21 +93,73 @@ export interface DiagnosticsMessage {
   payload: Record<string, unknown>;
 }
 
-export type RuntimeMessage = ContentReadyMessage | DiagnosticsMessage;
+/** Posts to store: a page of a bookmarks or likes timeline, or one the user just added. */
+export interface CapturePostsMessage {
+  type: 'capture/posts';
+  accountId: string;
+  /** The timeline the items belong to. */
+  source: SourceKind;
+  items: Array<{ post: CapturedPost; sortIndex?: string }>;
+  /** Posts the items refer to, such as quoted posts. */
+  referenced: CapturedPost[];
+  /** Ids of posts X reports as no longer available. */
+  unavailable: string[];
+}
+
+/** The user removed a bookmark or a like. */
+export interface CaptureClearMessage {
+  type: 'capture/clear';
+  accountId: string;
+  source: SourceKind;
+  postId: string;
+}
+
+export type CaptureMessage = CapturePostsMessage | CaptureClearMessage;
+
+/** The worker's answer to a capture message: the account's totals afterwards. */
+export type CaptureReply = { ok: true; counts: Counts } | { ok: false };
+
+export type RuntimeMessage = ContentReadyMessage | CaptureMessage | DiagnosticsMessage;
+
+export const MAX_ITEMS = 200;
+const SORT_INDEX = /^\d{1,30}$/;
+
+const isSource = (value: unknown): value is SourceKind => value === 'bookmark' || value === 'like';
 
 export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
   if (!isRecord(value)) return false;
   if (value.type === 'content/ready') return true;
+  if (value.type === 'capture/clear') {
+    return isId(value.accountId) && isSource(value.source) && isId(value.postId);
+  }
+  if (value.type === 'capture/posts') {
+    const { items, referenced, unavailable } = value;
+    return (
+      isId(value.accountId) &&
+      isSource(value.source) &&
+      Array.isArray(items) &&
+      items.length <= MAX_ITEMS &&
+      items.every(
+        (item) =>
+          isRecord(item) &&
+          isCapturedPost(item.post) &&
+          (item.sortIndex === undefined ||
+            (typeof item.sortIndex === 'string' && SORT_INDEX.test(item.sortIndex))),
+      ) &&
+      Array.isArray(referenced) &&
+      referenced.length <= MAX_ITEMS * 2 &&
+      referenced.every(isCapturedPost) &&
+      Array.isArray(unavailable) &&
+      unavailable.length <= MAX_ITEMS &&
+      unavailable.every(isId)
+    );
+  }
   // Production neither sends nor accepts diagnostics messages.
   if (!DIAGNOSTICS) return false;
   return (
     (value.type === 'diagnostics/operation' || value.type === 'diagnostics/environment') &&
     isRecord(value.payload)
   );
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isOptionalText(value: unknown, max: number): boolean {

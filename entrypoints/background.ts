@@ -1,14 +1,17 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { DIAGNOSTICS } from '@/src/build';
+import { clearSource, saveCapture } from '@/src/db/repo';
+import { library } from '@/src/db/schema';
 import type { EnvironmentObservation } from '@/src/diagnostics/environment';
 import type { OperationObservation } from '@/src/diagnostics/observe';
 import { recordEnvironment, recordOperation } from '@/src/diagnostics/store';
 import { isSupportedUrl } from '@/src/hosts';
-import { isRuntimeMessage } from '@/src/messaging/protocol';
+import { isRuntimeMessage, type CaptureReply } from '@/src/messaging/protocol';
 
 /**
- * Background worker. The browser can stop it at any time, so it keeps nothing
+ * Background worker. It is the only writer to the library on behalf of
+ * content scripts. The browser can stop it at any time, so it keeps nothing
  * that matters in memory.
  */
 export default defineBackground(() => {
@@ -24,6 +27,18 @@ export default defineBackground(() => {
     if (message.type === 'content/ready') {
       sendResponse({ ok: true });
       return;
+    }
+
+    if (message.type === 'capture/posts' || message.type === 'capture/clear') {
+      const stored =
+        message.type === 'capture/posts'
+          ? saveCapture(library(), message)
+          : clearSource(library(), message.accountId, message.postId, message.source);
+      stored.then(
+        (counts) => sendResponse({ ok: true, counts } satisfies CaptureReply),
+        () => sendResponse({ ok: false } satisfies CaptureReply),
+      );
+      return true; // respond asynchronously
     }
 
     if (DIAGNOSTICS) {

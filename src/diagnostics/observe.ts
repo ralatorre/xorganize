@@ -6,7 +6,7 @@
  */
 
 import type { ResponseMessage } from '@/src/messaging/protocol';
-import { isRecord } from '@/src/messaging/protocol';
+import { isRecord } from '@/src/guards';
 import {
   describeKeys,
   describeShape,

@@ -25,7 +25,7 @@ The extension makes no network requests of its own, loads no remote code, and ha
 | UI | Preact + Signals | Small bundle, which matters for a content script injected on every x.com page. |
 | Styling | Plain CSS with custom properties, in a shadow root | No runtime styling cost, full isolation from X's CSS. |
 | Storage | IndexedDB through Dexie 4 | Compound indexes, migrations, cross-context live queries. |
-| Validation | Valibot | Small, tree-shakeable schema validation for untrusted input. |
+| Validation | Hand-written type guards, with size caps | Enough for the messages that exist today. A schema library (Valibot) is to be added when importing files needs it (M4). |
 | Search | MiniSearch | In-memory full-text index, sufficient at the target scale. |
 | List virtualisation | `@tanstack/virtual-core` | |
 | Tests | Vitest (unit), Playwright (end to end against a mock site) | |
@@ -326,6 +326,8 @@ Runs in the content script, only on a source timeline page, and only after the u
 
 ## 8. Injected UI
 
+**Built so far:** a status line (`entrypoints/x.content/banner.ts`). After each captured page of bookmarks or likes it shows the account's running total for that source, at the bottom centre of the window, and hides when the address changes. It lives in a closed shadow root with a constructed stylesheet, takes no input (`pointer-events: none`), and is given its text with `textContent`. It is the only thing the extension adds to the page, and is visible to the page by design. The rest of this section describes what is still to come.
+
 - **Mounting.** One shadow root per injected control, with styles adopted through a shared constructable stylesheet. A single `MutationObserver` on the primary column finds new `article[data-testid="tweet"]` elements and mounts a tag button into the action bar (the `[role="group"]` row, before the element containing `[data-testid="bookmark"]` or `[data-testid="removeBookmark"]`). The observer callback is batched with `requestAnimationFrame`.
 - **Recycling.** X virtualises its timeline and reuses DOM nodes. Each mount is tagged with the post ID it was created for and is re-bound when that changes.
 - **Tag state for visible posts.** The content script asks the service worker for the tags of visible post IDs in one batched request, and subscribes to changes so that edits in the library or another tab are reflected.
@@ -411,7 +413,9 @@ interface Meta {
 Notes:
 
 - Posts quoted by a saved post are stored with `isBookmark`, `isLike` and `hasTags` all `0`. The library hides such records unless they are referenced by a visible post. A cleanup pass removes orphans.
-- Sort indexes are stored as fixed-width, zero-padded strings so that string comparison matches numeric order.
+- Sort indexes are stored as fixed-width, zero-padded strings so that string comparison matches numeric order. A post the user has just bookmarked or liked has no index until its timeline is next loaded, so it gets a provisional key built from the time, prefixed with `~`, which sorts above every real index: newest first.
+- Sources follow two signals. A post arriving through a bookmarks or likes timeline, or through a bookmark or like request, gets that source. For the other source, the post's own `legacy.bookmarked` and `legacy.favorited` fields are followed when present, so a post seen in the bookmarks timeline that is also liked is recorded as both, and one that has since been unliked elsewhere loses the like.
+- When a source is removed and the post has no other source and no tags, the post is deleted. The "keep posts" setting (DESIGN 4.7) will make this configurable.
 - Tag use counts are computed with a count on the `postTags` index, not stored, so they cannot drift.
 
 ### 9.2 Dexie schema
@@ -443,12 +447,11 @@ Content scripts talk to the service worker over `runtime.sendMessage` for reques
 
 | Message | Direction | Purpose |
 | --- | --- | --- |
-| `posts/upsert` | content → worker | Store posts from a source timeline or mutation. Payload capped at 200 posts. |
-| `posts/clear-source` | content → worker | A bookmark or like was removed. |
+| `capture/posts` | content → worker | Store posts from a bookmarks or likes timeline, or one the user just bookmarked or liked, with referenced posts and the IDs of unavailable ones. Capped at 200 items. The reply carries the account's new totals. |
+| `capture/clear` | content → worker | A bookmark or like was removed. The reply carries the account's new totals. |
 | `tags/for-posts` | content → worker | Tags for a batch of visible post IDs. |
 | `tags/suggest` | content → worker | Autocomplete: prefix, limit. |
 | `tags/set` | content → worker | Add or remove tags on one post; creates tags as needed; includes the post record when it is not yet stored. |
-| `capture/status` | content → worker | Counts and completion state for the banner. |
 | `health/report` | content → worker | `capture-degraded` or `inline-ui-degraded`. |
 | `tags/changed` | worker → content (port) | Push updates for subscribed post IDs. |
 | `settings/changed` | worker → content (port) | Push settings updates. |
@@ -624,11 +627,11 @@ From a first diagnostics run against a real free account on 2026-11-25, in Chrom
 | 3 | **Confirmed.** The interceptor saw the client's calls, so it is installed before the client takes its references. |
 | 4 | **Partly.** Entries carry `entryId` and `sortIndex`. A response holds post entries followed by a top cursor and a bottom cursor. Ordering of post entries still to be measured. |
 | 5 | **Confirmed, with corrections.** The author's handle and name are at `core.user_results.result.core.*` and the avatar at `avatar.image_url`; the older `legacy.*` locations were absent. Text, long-form text, dates, language, media, links and quoted posts are where 7.4 expects. `TweetWithVisibilityResults` wraps a post under `.tweet`. Timeline roots: `data.bookmark_timeline_v2.timeline`, `data.user.result.timeline.timeline`, `data.home.home_timeline_urt`. |
-| 6 | **Open.** No mutation was observed in the first run. |
+| 6 | **Confirmed** (second run). `CreateBookmark`, `DeleteBookmark`, `FavoriteTweet` and `UnfavoriteTweet` are `POST` requests whose JSON body carries the post ID at `variables.tweet_id`. |
 | 7 | **Confirmed.** The cookie is readable and matches the expected format. For `Likes`, `variables.userId` equalled the account's ID. |
 | 8 | **Confirmed.** Every selector in `src/dom/selectors.ts` matched on the home, bookmarks and likes pages. |
-| 9 | **Open.** Not enough pages were loaded to reach the end of a timeline. |
+| 9 | **Partly** (second run). A bookmarks list of about twenty posts was read to its end: the last page simply holds fewer posts, followed by the two cursors. Whether a long list is cut off after some number of posts is still unknown. |
 
 One finding not anticipated by the spec: every post carries `legacy.bookmarked` and `legacy.favorited`, the account's own state for that post. A post seen in any timeline therefore says whether it is bookmarked or liked, which gives a second way to keep sources accurate.
 
-Also open: the address of the bookmarks and likes pages, which the first run masked too aggressively to read.
+The address of the bookmarks and likes pages was masked too aggressively in both runs to be read. The design no longer depends on it: the status line appears when a bookmarks or likes response is captured, not when a particular address is open.
