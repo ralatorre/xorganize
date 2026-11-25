@@ -4,6 +4,8 @@ node_modules/
 .wxt/
 dist/
 coverage/
+test-results/
+playwright-report/
 *.tsbuildinfo
 web-ext.config.ts
 web-ext-artifacts/

@@ -1,0 +1,6 @@
+.output/
+.wxt/
+test-results/
+playwright-report/
+pnpm-lock.yaml
+*.md

@@ -1,0 +1,21 @@
+# Development image: Node, pnpm, and the Chromium build that Playwright drives.
+# Built and used through container/run. Nothing here is shipped in the extension.
+
+FROM docker.io/library/node:24-bookworm-slim
+
+# Both versions are read from package.json by container/run, so that file stays
+# the single place where tool versions are pinned.
+ARG PNPM_VERSION
+ARG PLAYWRIGHT_VERSION
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
+
+RUN test -n "${PNPM_VERSION}" && test -n "${PLAYWRIGHT_VERSION}" \
+ && npm install --global "pnpm@${PNPM_VERSION}" \
+ && npx --yes "playwright@${PLAYWRIGHT_VERSION}" install --with-deps --no-shell chromium \
+ && chmod -R a+rX /opt/playwright \
+ && npm cache clean --force \
+ && rm -rf /root/.npm /var/lib/apt/lists/*
+
+WORKDIR /work
