@@ -1,6 +1,7 @@
 /**
  * Storage for the diagnostics report: a small IndexedDB database of its own,
  * under the extension's origin, that exists only in the diagnostics build.
+ * The IndexedDB factory is handed in, so tests can use an in-memory one.
  */
 
 import type { EnvironmentObservation } from './environment';
@@ -24,9 +25,37 @@ const ENVIRONMENT = 'environment';
  */
 const VERSION = 2;
 
-function open(): Promise<IDBDatabase> {
+export interface DiagnosticsStore {
+  recordOperation(seen: OperationObservation): Promise<void>;
+  recordEnvironment(seen: EnvironmentObservation): Promise<void>;
+  readReport(): Promise<DiagnosticsReport>;
+  clearReport(): Promise<void>;
+}
+
+export function createDiagnosticsStore(
+  factory: IDBFactory,
+  name: string = DATABASE,
+): DiagnosticsStore {
+  const connect = () => open(factory, name);
+  return {
+    recordOperation: (seen) =>
+      update<OperationRecord>(connect, OPERATIONS, seen.op, (existing) =>
+        mergeOperation(existing, seen),
+      ),
+    recordEnvironment: (seen) =>
+      update<EnvironmentRecord>(connect, ENVIRONMENT, seen.page, (existing) =>
+        mergeEnvironment(existing, seen),
+      ),
+    readReport: () => readReport(connect),
+    clearReport: () => clearReport(connect),
+  };
+}
+
+type Connect = () => Promise<IDBDatabase>;
+
+function open(factory: IDBFactory, name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE, VERSION);
+    const request = factory.open(name, VERSION);
     request.onupgradeneeded = () => {
       const database = request.result;
       for (const name of [...database.objectStoreNames]) database.deleteObjectStore(name);
@@ -47,8 +76,13 @@ function done(transaction: IDBTransaction): Promise<void> {
 }
 
 /** Reads a record, merges an observation into it and writes it back, in one transaction. */
-async function update<T>(store: string, key: string, merge: (existing: T | undefined) => T) {
-  const database = await open();
+async function update<T>(
+  connect: Connect,
+  store: string,
+  key: string,
+  merge: (existing: T | undefined) => T,
+): Promise<void> {
+  const database = await connect();
   try {
     const transaction = database.transaction(store, 'readwrite');
     const objects = transaction.objectStore(store);
@@ -60,18 +94,8 @@ async function update<T>(store: string, key: string, merge: (existing: T | undef
   }
 }
 
-export function recordOperation(seen: OperationObservation): Promise<void> {
-  return update<OperationRecord>(OPERATIONS, seen.op, (existing) => mergeOperation(existing, seen));
-}
-
-export function recordEnvironment(seen: EnvironmentObservation): Promise<void> {
-  return update<EnvironmentRecord>(ENVIRONMENT, seen.page, (existing) =>
-    mergeEnvironment(existing, seen),
-  );
-}
-
-export async function readReport(): Promise<DiagnosticsReport> {
-  const database = await open();
+async function readReport(connect: Connect): Promise<DiagnosticsReport> {
+  const database = await connect();
   try {
     const transaction = database.transaction([OPERATIONS, ENVIRONMENT], 'readonly');
     const operations = transaction.objectStore(OPERATIONS).getAll();
@@ -86,8 +110,8 @@ export async function readReport(): Promise<DiagnosticsReport> {
   }
 }
 
-export async function clearReport(): Promise<void> {
-  const database = await open();
+async function clearReport(connect: Connect): Promise<void> {
+  const database = await connect();
   try {
     const transaction = database.transaction([OPERATIONS, ENVIRONMENT], 'readwrite');
     transaction.objectStore(OPERATIONS).clear();

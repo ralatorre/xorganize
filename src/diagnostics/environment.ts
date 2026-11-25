@@ -69,14 +69,21 @@ export function accountCookieStatus(cookie: string): string {
     .replace(/\d/g, '9')}`;
 }
 
-export function observeEnvironment(): EnvironmentObservation {
+/** What the probe looks at: the page's elements, its path and its cookies. */
+export interface ObservedPage {
+  root: ParentNode;
+  pathname: string;
+  cookie: string;
+}
+
+export function observeEnvironment(page: ObservedPage): EnvironmentObservation {
   const selectors = {} as Record<SelectorName, number>;
   for (const name of Object.keys(SELECTORS) as SelectorName[]) {
-    selectors[name] = document.querySelectorAll(SELECTORS[name]).length;
+    selectors[name] = page.root.querySelectorAll(SELECTORS[name]).length;
   }
   return {
-    page: pageKind(location.pathname),
-    accountCookie: accountCookieStatus(document.cookie),
+    page: pageKind(page.pathname),
+    accountCookie: accountCookieStatus(page.cookie),
     selectors,
   };
 }

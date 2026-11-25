@@ -99,6 +99,8 @@ Why this split:
 │   └── welcome/
 ├── src/
 │   ├── capture/
+│   │   ├── content.ts             # routes bridge messages in the content script
+│   │   ├── pipeline.ts            # what to store from each response
 │   │   ├── operations.ts          # table of known GraphQL operations
 │   │   ├── extract.ts             # shape-tolerant post extraction
 │   │   └── normalise.ts           # raw result -> Post
@@ -109,6 +111,9 @@ Why this split:
 │   ├── messaging/
 │   │   ├── protocol.ts            # message types + Valibot schemas
 │   │   └── client.ts
+│   ├── library/                   # what the library page shows: snapshot, thumbnails, format
+│   ├── worker/
+│   │   └── handler.ts             # routes runtime messages in the background worker
 │   ├── search/
 │   ├── transfer/                  # export / import
 │   ├── settings/
@@ -121,9 +126,12 @@ Why this split:
 ├── public/icons/
 ├── wxt.config.ts
 ├── package.json
+├── CONTRIBUTING.md
 ├── LICENSE
 └── README.md
 ```
+
+Code in `src/` is given its dependencies (database, browser APIs, DOM, clock, timers), and only `entrypoints/` wires in the real ones. Each module has one responsibility: validation, pure decisions, effects, routing, wiring or UI. See [CONTRIBUTING.md](../CONTRIBUTING.md#code-quality).
 
 ## 6. Manifest and permissions
 

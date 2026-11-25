@@ -1,32 +1,39 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { DiagnosticsReport } from '@/src/diagnostics/report';
-import { clearReport, readReport } from '@/src/diagnostics/store';
+import type { DiagnosticsStore } from '@/src/diagnostics/store';
+
+/** How often the panel re-reads the report while open. */
+const REFRESH_MS = 2000;
 
 /**
  * Diagnostics build only. Shows which operations have been seen and lets the
  * report be saved as a file. The report describes structure, not content.
  */
-export function Diagnostics() {
+export function Diagnostics(props: {
+  store: Pick<DiagnosticsStore, 'readReport' | 'clearReport'>;
+  refreshMs?: number;
+}) {
+  const { store, refreshMs = REFRESH_MS } = props;
   const [report, setReport] = useState<DiagnosticsReport>();
 
   useEffect(() => {
     let live = true;
     const load = () => {
-      readReport().then(
+      store.readReport().then(
         (next) => live && setReport(next),
         () => {},
       );
     };
     load();
-    const timer = setInterval(load, 2000);
+    const timer = setInterval(load, refreshMs);
     return () => {
       live = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [store, refreshMs]);
 
   const download = async () => {
-    const latest = await readReport();
+    const latest = await store.readReport();
     const blob = new Blob([JSON.stringify(latest, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -37,8 +44,8 @@ export function Diagnostics() {
   };
 
   const clear = async () => {
-    await clearReport();
-    setReport(await readReport());
+    await store.clearReport();
+    setReport(await store.readReport());
   };
 
   const operations = report?.operations ?? [];
