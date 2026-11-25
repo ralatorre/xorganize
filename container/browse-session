@@ -47,4 +47,15 @@ rm -f /profile/Singleton*
   --disable-features=DisableLoadExtensionCommandLineSwitch \
   --window-position=0,0 \
   --window-size="${size/x/,}" \
-  "${START_URL:-https://x.com/}" >/dev/null 2>&1
+  "${START_URL:-https://x.com/}" >/dev/null 2>&1 &
+browser=$!
+
+# Ctrl+C in the terminal, or `podman stop`, reaches this script and not the
+# browser. Pass it on, so the browser closes cleanly and saves its profile.
+trap 'kill -TERM "$browser" 2>/dev/null || true' INT TERM
+
+# `wait` returns early when a signal arrives, so keep waiting until the
+# browser has really gone. Closing its last window ends the session too.
+while kill -0 "$browser" 2>/dev/null; do
+  wait "$browser" || true
+done
