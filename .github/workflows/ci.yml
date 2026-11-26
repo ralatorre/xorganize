@@ -26,11 +26,22 @@ jobs:
       - name: Install dependencies
         run: container/run --net pnpm install --frozen-lockfile
 
-      - name: Audit dependencies
-        run: container/run --net pnpm audit
-
       - name: Check (offline)
         run: container/run pnpm check
+
+  # Flags known vulnerabilities in any dependency. Not a required check: a
+  # failure shows on the pull request but does not block merging.
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Audit dependencies
+        run: container/run --net pnpm audit
 
   secrets:
     name: Secret scan

@@ -21,7 +21,11 @@ It typechecks, lints, runs the unit tests, builds for Chromium and Firefox plus 
 - **Undetectable by the page.** No `window.postMessage`, no web-accessible resources, and no globals or DOM changes from the capture scripts (SPEC 7.1, 7.2). Tests check this.
 - **Untrusted input.** Everything from the page or X's API is `unknown` until a guard has checked it, and is rendered only as text. Lint forbids `innerHTML` and friends.
 - **Dependencies.** Prefer the platform and the standard library. A new dependency needs a reason in the pull request, an exact version, and a check that it does nothing on the network or the page that we would not do ourselves.
-- **Latest versions.** Every dependency, pnpm, GitHub Action, runner and container base image stays on its latest release, with Node on its newest LTS line and `@types/node` matching it. The one exception is TypeScript, which skips version 7. Dependabot opens the update pull requests (`.github/dependabot.yml`). Check each one like a new dependency: read what changed, and look for new network, page or storage behaviour and new install scripts. CI runs `pnpm audit` and fails on any known vulnerability.
+- **Latest versions.** Every dependency, pnpm, GitHub Action, runner and container base image stays on its latest release that is at least three days old. Node stays on its newest LTS line, with `@types/node` matching it. The one exception is TypeScript, which skips version 7.
+  - The three days are a supply-chain defence: most hijacked releases are found and pulled within that time. `pnpm-workspace.yaml` sets `minimumReleaseAge`, so pnpm refuses younger packages, direct or indirect, both when resolving and in the lockfile.
+  - A security fix that cannot wait goes in `minimumReleaseAgeExclude` with the advisory named. Remove the entry once the release is three days old.
+  - Dependabot opens the update pull requests (`.github/dependabot.yml`). Check each one like a new dependency: read what changed, and look for new network, page or storage behaviour and new install scripts. Close any that move Node to an odd-numbered major.
+  - The "Dependency audit" CI job runs `pnpm audit`. It flags known vulnerabilities but is not a required check, so it does not block merging.
 - **Privacy when privacy and convenience conflict.** Say what the trade-off is in the pull request.
 
 Never commit captured traffic (`*.har`, response dumps), personal exports, credentials, real handles or post content, or screenshots of a real account. Test fixtures are hand-written placeholders. SPEC 16 has the full list.

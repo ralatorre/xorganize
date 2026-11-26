@@ -1,0 +1,5 @@
+# Supply-chain policy (CONTRIBUTING, "Latest versions"). pnpm refuses any
+# package published less than three days ago, when resolving and when
+# installing from the lockfile. Most hijacked releases are found and pulled
+# within that time.
+minimumReleaseAge: 4320 # minutes
