@@ -275,18 +275,30 @@ const sidebarTag = (library: Page, label: string) =>
     .getByRole('region', { name: 'Tags' })
     .getByRole('button', { name: new RegExp(`^${label} [\\d,]+$`) });
 
+/** The tag chips on a library card, in order. */
+const chips = (library: Page, text: string) =>
+  library
+    .locator('article.post', { hasText: text })
+    .locator('.post__tags .chip:not(.chip--add)')
+    .allTextContents();
+
+/** Types each name into the open popover and applies it, then closes the popover. */
+async function typeTags(page: Page, names: string[]) {
+  await expect.poll(() => popoverOpen(page)).toBe(true);
+  for (const name of names) {
+    await page.keyboard.type(name);
+    // Wait for the suggestions, so Enter takes exactly the typed name.
+    await page.waitForTimeout(200);
+    await page.keyboard.press('Enter');
+  }
+  await page.keyboard.press('Escape');
+  await expect.poll(() => popoverOpen(page)).toBe(false);
+}
+
 /** Tags a post from its button on the page, one name at a time. */
 async function tagFromPage(site: Page, postId: string, names: string[]) {
   await tagHost(site, postId).click();
-  await expect.poll(() => popoverOpen(site)).toBe(true);
-  for (const name of names) {
-    await site.keyboard.type(name);
-    // Wait for the suggestions, so Enter takes exactly the typed name.
-    await site.waitForTimeout(200);
-    await site.keyboard.press('Enter');
-  }
-  await site.keyboard.press('Escape');
-  await expect.poll(() => popoverOpen(site)).toBe(false);
+  await typeTags(site, names);
 }
 
 test('a post tagged on X can be found in the library by its tags', async ({
@@ -313,8 +325,7 @@ test('a post tagged on X can be found in the library by its tags', async ({
   await expect(library.getByRole('button', { name: /^Bookmarks 0$/ })).toBeVisible();
 
   // Each card carries its tags, in the order they were applied.
-  const card = library.locator('.post', { hasText: 'Seen in a timeline' });
-  await expect(card.getByRole('list', { name: 'Tags' })).toHaveText(['Rust', 'to read'].join(''));
+  await expect.poll(() => chips(library, 'Seen in a timeline')).toEqual(['Rust', 'to read']);
 
   // One tag, then a second added with Ctrl: all of them, then any of them.
   await sidebarTag(library, 'Rust').click();
@@ -350,4 +361,157 @@ test('a post tagged on X can be found in the library by its tags', async ({
   await expect.poll(() => listed(library)).toEqual(['Only on the page']);
   await search.fill('timeline #rust');
   await expect.poll(() => listed(library)).toEqual(['Seen in a timeline']);
+});
+
+test('tags are renamed, recoloured, merged and deleted in the library, and x.com follows', async ({
+  context,
+  extensionId,
+}) => {
+  await serveStandIn(context);
+  const site = await openSite(context);
+  await tagFromPage(site, '101', ['Rust', 'to read']);
+  await tagFromPage(site, '102', ['Rust']);
+  const library = await context.newPage();
+  await library.goto(`chrome-extension://${extensionId}/library.html`);
+  await expect(sidebarTag(library, 'Rust')).toContainText('2');
+
+  // Rename, from the tag's ⋯ button. Open tabs on x.com show the new name.
+  await library.getByRole('button', { name: 'Manage Rust' }).click();
+  await library.getByRole('button', { name: 'Rename' }).click();
+  await library.getByRole('textbox', { name: 'New name' }).fill('Rust lang');
+  await library.getByRole('button', { name: 'Save' }).click();
+  await expect(sidebarTag(library, 'Rust lang')).toContainText('2');
+  await expect
+    .poll(() => tagButtons(site))
+    .toEqual(['Tags: Rust lang, to read', 'Tags: Rust lang']);
+
+  // A name another tag has is refused, and Esc leaves it as it was.
+  await library.getByRole('button', { name: 'Manage to read' }).click();
+  await library.getByRole('button', { name: 'Rename' }).click();
+  await library.getByRole('textbox', { name: 'New name' }).fill('rust LANG');
+  await library.getByRole('button', { name: 'Save' }).click();
+  await expect(library.getByRole('alert')).toHaveText(
+    'Another tag has that name. Merge into it instead.',
+  );
+  await library.keyboard.press('Escape');
+  await expect(library.getByRole('group', { name: 'Manage to read' })).toHaveCount(0);
+  await expect(library.getByRole('button', { name: 'Manage to read' })).toBeFocused();
+
+  // Another colour from the palette.
+  await library.getByRole('button', { name: 'Manage to read' }).click();
+  await library.getByRole('button', { name: 'Change colour' }).click();
+  await library.getByRole('radio', { name: 'Pink' }).check();
+  await expect(sidebarTag(library, 'to read').locator('.tag-dot')).toHaveCSS(
+    'background-color',
+    'rgb(249, 24, 128)',
+  );
+  await library.getByRole('button', { name: 'Done' }).click();
+
+  // Merge: the posts move, and the tag goes.
+  await library.getByRole('button', { name: 'Manage to read' }).click();
+  await library.getByRole('button', { name: 'Merge into…' }).click();
+  await library.getByRole('combobox', { name: 'Merge into' }).selectOption({ label: 'Rust lang' });
+  await library.getByRole('button', { name: 'Merge', exact: true }).click();
+  await expect(sidebarTag(library, 'to read')).toHaveCount(0);
+  await expect(sidebarTag(library, 'Rust lang')).toContainText('2');
+  await expect.poll(() => tagButtons(site)).toEqual(['Tags: Rust lang', 'Tags: Rust lang']);
+
+  // Delete, from a right click: it asks first, and says what will happen.
+  await sidebarTag(library, 'Rust lang').click({ button: 'right' });
+  await library.getByRole('button', { name: 'Delete…' }).click();
+  const dialog = library.getByRole('dialog', { name: 'Delete the tag “Rust lang”?' });
+  await expect(dialog).toContainText(
+    'It will be taken off 2 posts. 2 of them are in the library only because of this tag, and will leave it.',
+  );
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(sidebarTag(library, 'Rust lang')).toBeVisible();
+
+  await library.getByRole('button', { name: 'Delete…' }).click();
+  await dialog.getByRole('button', { name: 'Delete tag' }).click();
+  await expect(library.getByRole('heading', { name: 'Your library is empty' })).toBeVisible();
+  await expect.poll(() => tagButtons(site)).toEqual(['Tag', 'Tag']);
+});
+
+test('cards are tagged, copied and removed, by pointer and by keyboard', async ({
+  context,
+  extensionId,
+}) => {
+  await serveStandIn(context);
+  const site = await openSite(context);
+  await tagFromPage(site, '101', ['Rust']);
+  await tagFromPage(site, '102', ['go']);
+  const library = await context.newPage();
+  await library.goto(`chrome-extension://${extensionId}/library.html`);
+  await expect.poll(() => listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
+
+  // [+] opens the same popover as on x.com. What is typed there is not taken
+  // for the library's shortcuts: `o` would open a tab, `j` would move.
+  const pages = context.pages().length;
+  await library
+    .locator('article.post', { hasText: 'Seen in a timeline' })
+    .getByRole('button', { name: 'Change tags' })
+    .click();
+  await typeTags(library, ['jot']);
+  await expect.poll(() => chips(library, 'Seen in a timeline')).toEqual(['Rust', 'jot']);
+  expect(context.pages()).toHaveLength(pages);
+  await expect(
+    library.locator('article.post', { hasText: 'Seen in a timeline' }).getByRole('button', {
+      name: 'Change tags',
+    }),
+  ).toBeFocused();
+  await expect.poll(() => tagButtons(site)).toEqual(['Tags: Rust, jot', 'Tags: go']);
+
+  // j and k move between cards, t tags the focused one, o opens it on X.
+  await library.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await library.keyboard.press('j');
+  await expect(library.locator('article.post', { hasText: 'Only on the page' })).toBeFocused();
+  await library.keyboard.press('j');
+  await expect(library.locator('article.post', { hasText: 'Seen in a timeline' })).toBeFocused();
+  await library.keyboard.press('j');
+  await expect(library.locator('article.post', { hasText: 'Seen in a timeline' })).toBeFocused();
+  await library.keyboard.press('k');
+  await expect(library.locator('article.post', { hasText: 'Only on the page' })).toBeFocused();
+  await library.keyboard.press('t');
+  await typeTags(library, ['keys']);
+  await expect.poll(() => chips(library, 'Only on the page')).toEqual(['go', 'keys']);
+
+  const [opened] = await Promise.all([context.waitForEvent('page'), library.keyboard.press('o')]);
+  await expect.poll(() => opened.url()).toBe('https://x.com/example_user/status/102');
+  await opened.close();
+
+  // ? lists the shortcuts.
+  await library.keyboard.press('?');
+  const help = library.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(help).toContainText('Next post');
+  await library.keyboard.press('j'); // a dialog is open: not a shortcut
+  await library.keyboard.press('Escape');
+  await expect(help).toHaveCount(0);
+
+  // Copy link puts the post's address on the clipboard. Chromium will not let
+  // a test read an extension's clipboard, so what is written is recorded on
+  // the way through; the real clipboard still has to accept it.
+  await library.evaluate(() => {
+    const clipboard = navigator.clipboard;
+    const write = clipboard.writeText.bind(clipboard);
+    clipboard.writeText = (text: string) => {
+      (window as unknown as { copied: string }).copied = text;
+      return write(text);
+    };
+  });
+  const card = library.locator('article.post', { hasText: 'Only on the page' });
+  await card.getByRole('button', { name: 'More actions' }).click();
+  await card.getByRole('button', { name: 'Copy link' }).click();
+  await expect(card.getByRole('status')).toHaveText('Link copied');
+  expect(await library.evaluate(() => (window as unknown as { copied: string }).copied)).toBe(
+    'https://x.com/example_user/status/102',
+  );
+
+  // Remove from library asks first; the post and its tags go, here and on x.com.
+  await card.getByRole('button', { name: 'Remove from library' }).click();
+  const confirm = library.getByRole('dialog', { name: 'Remove this post from the library?' });
+  await confirm.getByRole('button', { name: 'Remove' }).click();
+  await expect.poll(() => listed(library)).toEqual(['Seen in a timeline']);
+  await expect(sidebarTag(library, 'go')).toContainText('0');
+  await expect.poll(() => tagButtons(site)).toEqual(['Tags: Rust, jot', 'Tag']);
 });

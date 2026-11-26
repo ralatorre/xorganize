@@ -1,4 +1,7 @@
-/** A closed shadow root with its own styles, for one control added to x.com. */
+/**
+ * A closed shadow root with its own styles, for one control: added to x.com,
+ * or to the library for the tag popover they share.
+ */
 
 const sheets = new Map<string, CSSStyleSheet>();
 
@@ -19,11 +22,11 @@ export interface ShadowHost {
   container: HTMLElement;
 }
 
-export function createShadowHost(styles: string): ShadowHost {
-  const host = document.createElement('div');
+export function createShadowHost(doc: Document, styles: string): ShadowHost {
+  const host = doc.createElement('div');
   const root = host.attachShadow({ mode: 'closed' });
   root.adoptedStyleSheets = [sheetFor(styles)];
-  const container = document.createElement('div');
+  const container = doc.createElement('div');
   container.className = 'theme';
   root.append(container);
   return { host, container };

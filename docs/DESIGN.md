@@ -164,8 +164,10 @@ Full tab layout:
 Sidebar:
 
 - **Sources** are mutually exclusive quick filters. "All" is every bookmarked, liked or tagged post. "Tagged only" is tagged but neither bookmarked nor liked. "Untagged" is bookmarked or liked with no tag: the inbox for triage. A source and tags combine.
-- **Tags** are listed by name with counts, groups among them in the same order. Click to show only that tag; click it again to clear it. `Ctrl`/`Cmd`+click adds a tag to the filter, or takes it out. A group can be collapsed. The context menu offers Rename, Change colour, Merge into another tag, and Delete.
-- Deleting a tag removes it from posts but never deletes posts. It asks for confirmation and states how many posts are affected.
+- **Tags** are listed by name with counts, groups among them in the same order. Click to show only that tag; click it again to clear it. `Ctrl`/`Cmd`+click adds a tag to the filter, or takes it out. A group can be collapsed. Each tag has a `⋯` button, shown on hover and focus, which a right click on the tag also opens. It offers Rename, Change colour, Merge into another tag, and Delete, in a panel under the tag. Esc closes it.
+- Renaming to a name another tag already has is refused, with a pointer to Merge. A change of casing alone is allowed.
+- Merging moves every post of one tag to the other and removes the first.
+- Deleting a tag takes it off every post. It asks for confirmation and states how many posts are affected. It never removes a bookmarked or liked post. A post that is in the library only because of that tag leaves it, as when its last tag is taken off, and the confirmation says how many will.
 
 Main column:
 
@@ -173,7 +175,8 @@ Main column:
 - **Match All / Any** switches between requiring every selected tag and any of them. It appears once two tags are selected.
 - **Sort**: saved order (newest first, the default; for Bookmarks and Likes, X's own order), post date (newest first), author (A to Z).
 - **No posts match** offers Clear filters, which returns to All with no tags and keeps the sort.
-- **Post card** shows avatar, name, handle, date, text, media thumbnails, a quoted post if present, and tag chips. The `[+]` chip opens the same tag popover as the inline button. "Open on X" opens the original in a new tab. The `⋯` menu offers Copy link and Remove from library.
+- **Post card** shows avatar, name, handle, date, text, media thumbnails, a quoted post if present, and tag chips. The `[+]` chip opens the same tag popover as the inline button. "Open on X" opens the original in a new tab. The `⋯` menu offers Copy link and Remove from library. Remove asks first: the post's tags go with it, and a post still bookmarked or liked on X comes back the next time that page loads.
+- Changes made in the library show at once in open x.com tabs.
 - **Export view**, in the menu beside Sort, exports exactly the posts in the current filter as JSON or CSV (see 5.6).
 - A post that has been unbookmarked or deleted on X is still shown, with a muted "No longer bookmarked" or "Unavailable on X" label.
 - The list is virtualised, so tens of thousands of posts scroll smoothly.
@@ -188,7 +191,9 @@ Bulk actions: ticking any checkbox reveals a bar.
 
 `Shift`+click selects a range. `Ctrl`/`Cmd`+`A` selects every post in the current filter.
 
-Library keyboard shortcuts: `/` focuses search, `j` / `k` move between posts, `t` tags the focused post, `x` toggles selection, `o` opens the post on X, `?` shows the shortcut list.
+Library keyboard shortcuts: `/` focuses search, `j` / `k` move between posts, `t` tags the focused post, `x` toggles selection, `o` opens the post on X, `?` shows the shortcut list. They act only outside a field or dialog, and never while typing in the tag popover.
+
+> **As first built:** every shortcut except `x`, which comes with bulk actions (M6).
 
 Side panel differences: the sidebar collapses into a filter dropdown, cards are denser, and bulk selection is omitted.
 

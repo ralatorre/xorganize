@@ -191,6 +191,21 @@ export async function clearSource(
   });
 }
 
+/**
+ * Takes a post out of the library, with its tags. If it is still bookmarked
+ * or liked on X, it comes back the next time that timeline is loaded.
+ */
+export async function removePost(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  postId: PostId,
+): Promise<void> {
+  await db.transaction('rw', db.posts, db.postTags, async () => {
+    await db.postTags.where('[accountId+postId]').equals([accountId, postId]).delete();
+    await db.posts.delete([accountId, postId]);
+  });
+}
+
 const allOf = (accountId: AccountId) =>
   [
     [accountId, Dexie.minKey],

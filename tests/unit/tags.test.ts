@@ -1,11 +1,15 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { normalisePost } from '@/src/capture/normalise';
-import { activeAccount, clearSource, saveCapture } from '@/src/db/repo';
+import { activeAccount, clearSource, removePost, saveCapture } from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
 import {
   UnknownPostError,
+  deleteTag,
+  mergeTags,
   recentTags,
+  recolourTag,
+  renameTag,
   setPostTags,
   suggestTags,
   tagsForPosts,
@@ -201,5 +205,117 @@ describe('suggestTags and recentTags', () => {
   it('suggests nothing from another account', async () => {
     expect(await suggestTags(db, OTHER, 'ty', 10)).toEqual([]);
     expect(await recentTags(db, OTHER)).toEqual([]);
+  });
+});
+
+describe('renameTag', () => {
+  beforeEach(async () => {
+    await change({ postId: '1', add: ['rust', 'go'], post: post('1') });
+  });
+
+  it('renames a tag on every post that carries it', async () => {
+    expect(await renameTag(db, ACCOUNT, 'tag-1', ' Rust  lang ')).toEqual({
+      ok: true,
+      tag: { id: 'tag-1', name: 'Rust lang', color: 0 },
+    });
+    expect((await tagsForPosts(db, ACCOUNT, ['1'])).get('1')![0]!.name).toBe('Rust lang');
+    expect(await suggestTags(db, ACCOUNT, 'rust l', 5)).toHaveLength(1);
+  });
+
+  it('allows a change of casing alone', async () => {
+    expect(await renameTag(db, ACCOUNT, 'tag-1', 'RUST')).toMatchObject({ ok: true });
+  });
+
+  it('refuses a name another tag has, which would be a merge', async () => {
+    expect(await renameTag(db, ACCOUNT, 'tag-1', 'Go')).toEqual({ ok: false, problem: 'taken' });
+    expect((await db.tags.get([ACCOUNT, 'tag-1']))!.name).toBe('rust');
+  });
+
+  it('refuses a name that is not valid, and a tag that does not exist', async () => {
+    expect(await renameTag(db, ACCOUNT, 'tag-1', ' ')).toEqual({ ok: false, problem: 'empty' });
+    expect(await renameTag(db, ACCOUNT, 'tag-1', 'a;b')).toEqual({
+      ok: false,
+      problem: 'semicolon',
+    });
+    expect(await renameTag(db, OTHER, 'tag-1', 'new')).toEqual({ ok: false, problem: 'missing' });
+  });
+});
+
+describe('recolourTag', () => {
+  it('sets a colour from the palette, and nothing else', async () => {
+    await change({ postId: '1', add: ['rust'], post: post('1') });
+    expect(await recolourTag(db, ACCOUNT, 'tag-1', 11)).toBe(true);
+    expect((await db.tags.get([ACCOUNT, 'tag-1']))!.color).toBe(11);
+    for (const colour of [-1, 12, 1.5, Number.NaN]) {
+      expect(await recolourTag(db, ACCOUNT, 'tag-1', colour)).toBe(false);
+    }
+    expect(await recolourTag(db, ACCOUNT, 'tag-9', 2)).toBe(false);
+    expect((await db.tags.get([ACCOUNT, 'tag-1']))!.color).toBe(11);
+  });
+});
+
+describe('mergeTags', () => {
+  beforeEach(async () => {
+    await change({ postId: '1', add: ['rust'], post: post('1') }); // tag-1, at 1010
+    await change({ postId: '2', add: ['rustlang'], post: post('2') }); // tag-2, at 1020
+    await change({ postId: '2', add: ['rust'] }); // at 1030
+  });
+
+  it('moves every post to the other tag and removes the first', async () => {
+    expect(await mergeTags(db, ACCOUNT, 'tag-1', 'tag-2')).toBe(true);
+    expect(await db.tags.get([ACCOUNT, 'tag-1'])).toBeUndefined();
+    const found = await tagsForPosts(db, ACCOUNT, ['1', '2']);
+    expect(found.get('1')).toEqual([{ id: 'tag-2', name: 'rustlang', color: 1 }]);
+    expect(found.get('2')).toEqual([{ id: 'tag-2', name: 'rustlang', color: 1 }]);
+    expect(await useCount(db, ACCOUNT, 'tag-2')).toBe(2);
+    // Post 2 had both: it keeps the earlier time. Post 1 keeps its own.
+    expect((await db.postTags.get([ACCOUNT, '2', 'tag-2']))!.taggedAt).toBe(1020);
+    expect((await db.postTags.get([ACCOUNT, '1', 'tag-2']))!.taggedAt).toBe(1010);
+    // Most recently used: the later of the two.
+    expect((await db.tags.get([ACCOUNT, 'tag-2']))!.lastUsedAt).toBe(1030);
+  });
+
+  it('changes nothing for the same tag twice, or a tag that does not exist', async () => {
+    expect(await mergeTags(db, ACCOUNT, 'tag-1', 'tag-1')).toBe(false);
+    expect(await mergeTags(db, ACCOUNT, 'tag-1', 'tag-9')).toBe(false);
+    expect(await mergeTags(db, OTHER, 'tag-1', 'tag-2')).toBe(false);
+    expect(await db.tags.count()).toBe(2);
+    expect(await useCount(db, ACCOUNT, 'tag-1')).toBe(2);
+  });
+});
+
+describe('deleteTag', () => {
+  it('takes the tag off every post, and removes only posts nothing else keeps', async () => {
+    await change({ postId: '1', add: ['old'], post: post('1') }); // only this tag
+    await change({ postId: '2', add: ['old', 'keep'], post: post('2') }); // another tag
+    await change({ postId: '3', add: ['old'], post: post('3', { bookmarked: true }) });
+    await change({ postId: '4', add: ['keep'], post: post('4') }); // not carrying it
+
+    expect(await deleteTag(db, ACCOUNT, 'tag-1')).toEqual({ untagged: 3, removed: 1 });
+    expect(await db.tags.get([ACCOUNT, 'tag-1'])).toBeUndefined();
+    expect(await stored('1')).toBeUndefined();
+    expect(await stored('2')).toMatchObject({ hasTags: 1 });
+    expect(await stored('3')).toMatchObject({ hasTags: 0, isBookmark: 1 });
+    expect(await stored('4')).toMatchObject({ hasTags: 1 });
+    expect(await db.postTags.count()).toBe(2);
+  });
+
+  it('removes a tag on no post', async () => {
+    await change({ postId: '1', add: ['a'], post: post('1', { bookmarked: true }) });
+    await change({ postId: '1', remove: ['tag-1'] });
+    expect(await deleteTag(db, ACCOUNT, 'tag-1')).toEqual({ untagged: 0, removed: 0 });
+    expect(await db.tags.count()).toBe(0);
+  });
+});
+
+describe('removePost', () => {
+  it('takes the post and its tags out of the library, and leaves the tags themselves', async () => {
+    await change({ postId: '1', add: ['a', 'b'], post: post('1', { bookmarked: true }) });
+    await change({ postId: '2', add: ['a'], post: post('2') });
+    await removePost(db, ACCOUNT, '1');
+    expect(await stored('1')).toBeUndefined();
+    expect(await useCount(db, ACCOUNT, 'tag-1')).toBe(1);
+    expect(await useCount(db, ACCOUNT, 'tag-2')).toBe(0);
+    expect(await db.tags.count()).toBe(2);
   });
 });

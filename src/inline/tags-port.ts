@@ -1,5 +1,5 @@
 /**
- * Listens for tag changes made in other tabs. The port opens when first
+ * Listens for tag changes made in other tabs and in the library. The port opens when first
  * needed, and again after the browser closes it (it does whenever it stops
  * the worker), never by itself, so an idle page keeps no worker running.
  */
@@ -18,8 +18,11 @@ export interface TagsListenerDependencies {
   connect(): ListeningPort;
   accountId(): string | undefined;
   onChange(postId: string, tags: TagSummary[]): void;
-  /** Called after reconnecting, since changes made in between were not heard. */
-  onReconnect(): void;
+  /**
+   * The tags of any post may have changed: after reconnecting, since changes
+   * made in between were not heard, and after an edit in the library.
+   */
+  onStale(): void;
 }
 
 export function createTagsListener(deps: TagsListenerDependencies) {
@@ -40,10 +43,11 @@ export function createTagsListener(deps: TagsListenerDependencies) {
         if (port === current) port = undefined;
       });
       current.onMessage.addListener((message) => {
+        if (isTagsRefresh(message) && message.accountId === deps.accountId()) deps.onStale();
         if (!isTagsChanged(message) || message.accountId !== deps.accountId()) return;
         deps.onChange(message.postId, message.tags);
       });
-      if (everConnected) deps.onReconnect();
+      if (everConnected) deps.onStale();
       everConnected = true;
     },
   };
@@ -66,4 +70,8 @@ function isTagsChanged(
         Number.isInteger(tag.color),
     )
   );
+}
+
+function isTagsRefresh(value: unknown): value is { accountId: string } {
+  return isRecord(value) && value.type === 'tags/refresh' && isId(value.accountId);
 }

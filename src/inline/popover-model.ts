@@ -6,6 +6,16 @@
 import type { TagSuggestion, TagSummary } from '@/src/db/types';
 import { parseTagName, tagKey } from '@/src/tags/names';
 
+/** Suggestions the popover shows. */
+export const POPOVER_SUGGESTIONS = 8;
+
+/** What the popover is offered for the typed text. */
+export interface Suggestions {
+  suggestions: TagSuggestion[];
+  /** The most recently used tags, offered while nothing is typed. */
+  recent: TagSummary[];
+}
+
 export type Row = { kind: 'tag'; tag: TagSuggestion } | { kind: 'create'; name: string };
 
 /**

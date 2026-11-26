@@ -6,8 +6,8 @@
 
 import Dexie from 'dexie';
 import type { CapturedPost } from '@/src/capture/normalise';
-import { parseTagName, tagKey } from '@/src/tags/names';
-import { nextColour } from '@/src/tags/palette';
+import { parseTagName, tagKey, type TagNameProblem } from '@/src/tags/names';
+import { TAG_COLOURS, nextColour } from '@/src/tags/palette';
 import { mergePost, rememberAccount } from './repo';
 import type { LibraryDatabase } from './schema';
 import type { AccountId, PostId, Tag, TagId, TagSuggestion, TagSummary } from './types';
@@ -217,6 +217,128 @@ export async function setPostTags(
     }
     return tags;
   });
+}
+
+/** Why a tag could not be renamed. */
+export type RenameProblem = TagNameProblem | 'taken' | 'missing';
+
+export type RenameResult = { ok: true; tag: TagSummary } | { ok: false; problem: RenameProblem };
+
+/**
+ * Gives a tag a new name. A change of casing or spacing alone is allowed; a
+ * name another tag already has is not, since that is a merge (`mergeTags`).
+ */
+export async function renameTag(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  tagId: TagId,
+  name: string,
+): Promise<RenameResult> {
+  const parsed = parseTagName(name);
+  if (!parsed.ok) return parsed;
+  return db.transaction('rw', db.tags, async () => {
+    const tag = await db.tags.get([accountId, tagId]);
+    if (!tag) return { ok: false, problem: 'missing' } as const;
+    const holder = await db.tags
+      .where('[accountId+nameKey]')
+      .equals([accountId, parsed.nameKey])
+      .first();
+    if (holder && holder.id !== tagId) return { ok: false, problem: 'taken' } as const;
+    await db.tags.update([accountId, tagId], { name: parsed.name, nameKey: parsed.nameKey });
+    return { ok: true, tag: { ...summaryOf(tag), name: parsed.name } } as const;
+  });
+}
+
+/** Gives a tag another colour from the palette. False if the tag or colour does not exist. */
+export async function recolourTag(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  tagId: TagId,
+  color: number,
+): Promise<boolean> {
+  if (!Number.isInteger(color) || color < 0 || color >= TAG_COLOURS) return false;
+  return (await db.tags.update([accountId, tagId], { color })) === 1;
+}
+
+/**
+ * Moves every post from one tag to another and removes the first. A post that
+ * already carries both keeps the earlier of the two times it was tagged.
+ * False if either tag does not exist, or they are the same tag.
+ */
+export async function mergeTags(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  fromId: TagId,
+  intoId: TagId,
+): Promise<boolean> {
+  if (fromId === intoId) return false;
+  return db.transaction('rw', db.tags, db.postTags, async () => {
+    const [from, into] = await db.tags.bulkGet([
+      [accountId, fromId],
+      [accountId, intoId],
+    ]);
+    if (!from || !into) return false;
+    const links = await linksOf(db, accountId, fromId);
+    for (const link of links) {
+      const kept = await db.postTags.get([accountId, link.postId, intoId]);
+      const taggedAt = Math.min(link.taggedAt, kept?.taggedAt ?? Infinity);
+      await db.postTags.put({ accountId, postId: link.postId, tagId: intoId, taggedAt });
+    }
+    await db.postTags.bulkDelete(links.map((link) => [accountId, link.postId, fromId]));
+    await db.tags.delete([accountId, fromId]);
+    await db.tags.update([accountId, intoId], {
+      lastUsedAt: Math.max(from.lastUsedAt, into.lastUsedAt),
+    });
+    return true;
+  });
+}
+
+/** What deleting a tag did. */
+export interface TagDeletion {
+  /** Posts the tag was taken off. */
+  untagged: number;
+  /** Of those, posts that had no other tag and no source, and so left the library. */
+  removed: number;
+}
+
+/**
+ * Takes a tag off every post and removes it. A post that is still bookmarked,
+ * liked or tagged otherwise stays. One that was in the library only for this
+ * tag goes, as when its last tag is taken off (SPEC 9.1).
+ */
+export async function deleteTag(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  tagId: TagId,
+): Promise<TagDeletion> {
+  return db.transaction('rw', db.posts, db.tags, db.postTags, async () => {
+    const links = await linksOf(db, accountId, tagId);
+    await db.postTags.bulkDelete(links.map((link) => [accountId, link.postId, tagId]));
+    await db.tags.delete([accountId, tagId]);
+    let removed = 0;
+    for (const { postId } of links) {
+      const post = await db.posts.get([accountId, postId]);
+      const tagged = await db.postTags
+        .where('[accountId+postId]')
+        .equals([accountId, postId])
+        .count();
+      if (!post || tagged > 0) continue;
+      if (post.isBookmark || post.isLike) {
+        await db.posts.update([accountId, postId], { hasTags: 0 });
+      } else {
+        await db.posts.delete([accountId, postId]);
+        removed += 1;
+      }
+    }
+    return { untagged: links.length, removed };
+  });
+}
+
+function linksOf(db: LibraryDatabase, accountId: AccountId, tagId: TagId) {
+  return db.postTags
+    .where('[accountId+tagId+taggedAt]')
+    .between([accountId, tagId, Dexie.minKey], [accountId, tagId, Dexie.maxKey])
+    .toArray();
 }
 
 async function findOrCreateTag(

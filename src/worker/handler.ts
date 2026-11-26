@@ -12,12 +12,14 @@ import type { OperationObservation } from '@/src/diagnostics/observe';
 import { isSupportedUrl } from '@/src/hosts';
 import {
   isRuntimeMessage,
+  isTagsEditedNotice,
   type CaptureClearMessage,
   type CapturePostsMessage,
   type CaptureReply,
   type DiagnosticsMessage,
   type TagMessage,
   type TagsChangedMessage,
+  type TagsRefreshMessage,
   type TagsForPostsReply,
   type TagsSetReply,
   type TagsSuggestReply,
@@ -149,4 +151,15 @@ function handleTags(deps: WorkerDependencies, message: TagMessage): Promise<Repl
       deps.notify({ type: 'tags/changed', accountId, postId, tags });
       return { ok: true, tags };
     }, failed);
+}
+
+/**
+ * Passes an extension page's notice that it edited tags (`TAGS_CHANNEL`) on
+ * to the content scripts, which then ask again for what they show. Anything
+ * that is not such a notice is ignored.
+ */
+export function createEditRelay(notify: (message: TagsRefreshMessage) => void) {
+  return (notice: unknown): void => {
+    if (isTagsEditedNotice(notice)) notify({ type: 'tags/refresh', accountId: notice.accountId });
+  };
 }

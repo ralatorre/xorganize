@@ -6,6 +6,7 @@
 import type { CapturedPost } from '@/src/capture/normalise';
 import { themeOfColour, type Theme } from '@/src/dom/theme';
 import { createKeyboardGuard, contain } from '@/src/inline/keyboard-guard';
+import { POPOVER_SUGGESTIONS } from '@/src/inline/popover-model';
 import { matchesShortcut } from '@/src/inline/shortcut';
 import { createTagState } from '@/src/inline/tag-state';
 import { createTagger } from '@/src/inline/tagger';
@@ -18,12 +19,9 @@ import {
   type TagsSetReply,
   type TagsSuggestReply,
 } from '@/src/messaging/protocol';
+import { createPopover } from '@/src/ui/popover';
 import { startMounter } from './mounter';
-import { createPopover } from './popover';
 import { createTagButton, type TagButton } from './tag-button';
-
-/** Suggestions shown in the popover. */
-const SUGGESTIONS = 8;
 
 export interface InlineTaggingDependencies {
   send<Reply>(message: RuntimeMessage): Promise<Reply | undefined>;
@@ -65,7 +63,7 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
     connect: deps.connect,
     accountId: deps.accountId,
     onChange: (postId, tags) => state.set(postId, tags),
-    onReconnect: () => state.refresh(),
+    onStale: () => state.refresh(),
   });
 
   const change = createTagger({
@@ -83,6 +81,7 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
   });
 
   const popover = createPopover({
+    view: window,
     state,
     change,
     guard,
@@ -93,7 +92,7 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
         type: 'tags/suggest' as const,
         accountId,
         query,
-        limit: Math.min(SUGGESTIONS, MAX_SUGGESTIONS),
+        limit: Math.min(POPOVER_SUGGESTIONS, MAX_SUGGESTIONS),
       }));
       const reply = message ? await deps.send<TagsSuggestReply>(message) : undefined;
       return reply?.ok ? { suggestions: reply.suggestions, recent: reply.recent } : undefined;

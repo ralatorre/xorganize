@@ -6,7 +6,7 @@ import { postChanges, postsAfter, saveCapture } from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
 import { setPostTags } from '@/src/db/tags';
 import { SEARCH_FAILED, SEARCHING, summaryOf } from '@/src/library/format';
-import { isSearchShortcut, isTyping, type KeyPress } from '@/src/library/shortcuts';
+import { SHORTCUTS, isTyping, shortcutOf, stepTo, type KeyPress } from '@/src/library/shortcuts';
 import { createSearchClient, type SearchOutcome } from '@/src/search/client';
 import {
   MAX_TERMS,
@@ -437,14 +437,46 @@ describe('library shortcuts', () => {
     ...extra,
   });
 
-  it('focuses search on `/` alone, outside a field', () => {
-    expect(isSearchShortcut(press('/'))).toBe(true);
-    expect(isSearchShortcut(press('/', { target: null }))).toBe(true);
-    expect(isSearchShortcut(press('?'))).toBe(false);
-    expect(isSearchShortcut(press('/', { ctrlKey: true }))).toBe(false);
-    expect(isSearchShortcut(press('/', { metaKey: true }))).toBe(false);
-    expect(isSearchShortcut(press('/', { altKey: true }))).toBe(false);
-    expect(isSearchShortcut(press('/', { target: { tagName: 'INPUT' } }))).toBe(false);
+  it('maps each key on its own, outside a field, to its shortcut', () => {
+    expect(shortcutOf(press('/'))).toBe('search');
+    expect(shortcutOf(press('/', { target: null }))).toBe('search');
+    expect(shortcutOf(press('j'))).toBe('next');
+    expect(shortcutOf(press('k'))).toBe('previous');
+    expect(shortcutOf(press('t'))).toBe('tag');
+    expect(shortcutOf(press('o'))).toBe('open');
+    expect(shortcutOf(press('?'))).toBe('help');
+    expect(shortcutOf(press('J'))).toBeUndefined();
+    expect(shortcutOf(press('x'))).toBeUndefined();
+    expect(shortcutOf(press('Enter'))).toBeUndefined();
+  });
+
+  it('leaves keys alone with a modifier, in a field or in a dialog', () => {
+    expect(shortcutOf(press('/', { ctrlKey: true }))).toBeUndefined();
+    expect(shortcutOf(press('j', { metaKey: true }))).toBeUndefined();
+    expect(shortcutOf(press('t', { altKey: true }))).toBeUndefined();
+    expect(shortcutOf(press('/', { target: { tagName: 'INPUT' } }))).toBeUndefined();
+    expect(shortcutOf(press('j', { target: { tagName: 'SELECT' } }))).toBeUndefined();
+    expect(shortcutOf(press('k', { inDialog: true }))).toBeUndefined();
+  });
+
+  it('steps to the next or previous post, stopping at either end', () => {
+    expect(stepTo(3, 1, 10, 0)).toBe(4);
+    expect(stepTo(3, -1, 10, 0)).toBe(2);
+    expect(stepTo(9, 1, 10, 0)).toBe(9);
+    expect(stepTo(0, -1, 10, 0)).toBe(0);
+    expect(stepTo(12, 1, 10, 0)).toBe(9); // the list shrank under the focus
+  });
+
+  it('starts from the first post on screen when none has focus', () => {
+    expect(stepTo(undefined, 1, 10, 4)).toBe(4);
+    expect(stepTo(undefined, -1, 10, 4)).toBe(4);
+    expect(stepTo(undefined, 1, 3, 7)).toBe(2);
+    expect(stepTo(undefined, 1, 0, 0)).toBeUndefined();
+  });
+
+  it('lists every shortcut once', () => {
+    expect(new Set(SHORTCUTS.map((entry) => entry.key)).size).toBe(SHORTCUTS.length);
+    expect(new Set(SHORTCUTS.map((entry) => entry.shortcut)).size).toBe(SHORTCUTS.length);
   });
 
   it('treats inputs, text areas, selects and editable content as fields', () => {

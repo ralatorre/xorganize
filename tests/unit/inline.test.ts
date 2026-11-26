@@ -321,7 +321,7 @@ describe('createTagsListener', () => {
       },
       accountId: () => ACCOUNT,
       onChange: (postId, tags) => void changes.push([postId, tags]),
-      onReconnect: () => void reconnects++,
+      onStale: () => void reconnects++,
     });
     return { listener, ports, changes, reconnects: () => reconnects };
   }
@@ -361,6 +361,15 @@ describe('createTagsListener', () => {
     expect(reconnects()).toBe(1);
   });
 
+  it('asks again for everything when this account’s tags were edited in the library', () => {
+    const { listener, ports, reconnects } = setup();
+    listener.ensure();
+    ports[0]!.receive({ type: 'tags/refresh', accountId: ACCOUNT });
+    ports[0]!.receive({ type: 'tags/refresh', accountId: '9000000000000000002' });
+    ports[0]!.receive({ type: 'tags/refresh', accountId: '<x>' });
+    expect(reconnects()).toBe(1);
+  });
+
   it('gives up quietly when the extension has gone', () => {
     const listener = createTagsListener({
       connect: () => {
@@ -368,7 +377,7 @@ describe('createTagsListener', () => {
       },
       accountId: () => ACCOUNT,
       onChange: () => {},
-      onReconnect: () => {},
+      onStale: () => {},
     });
     expect(() => listener.ensure()).not.toThrow();
   });

@@ -5,8 +5,8 @@ import { clearSource, saveCapture } from '@/src/db/repo';
 import { library } from '@/src/db/schema';
 import { RECENT_TAGS, recentTags, setPostTags, suggestTags, tagsForPosts } from '@/src/db/tags';
 import { createDiagnosticsStore } from '@/src/diagnostics/store';
-import { TAGS_PORT, type TagsChangedMessage } from '@/src/messaging/protocol';
-import { createWorkerHandler, isTrustedSender } from '@/src/worker/handler';
+import { TAGS_CHANNEL, TAGS_PORT, type PortMessage } from '@/src/messaging/protocol';
+import { createEditRelay, createWorkerHandler, isTrustedSender } from '@/src/worker/handler';
 import { createSubscribers } from '@/src/worker/subscribers';
 
 /**
@@ -17,7 +17,7 @@ import { createSubscribers } from '@/src/worker/subscribers';
  */
 export default defineBackground(() => {
   const db = library();
-  const listeners = createSubscribers<TagsChangedMessage>();
+  const listeners = createSubscribers<PortMessage>();
   const handle = createWorkerHandler({
     extensionId: browser.runtime.id,
     store: {
@@ -52,6 +52,10 @@ export default defineBackground(() => {
     }
     listeners.add(port);
   });
+
+  // The library announces its tag edits here, for the content scripts to catch up.
+  const relay = createEditRelay((message) => listeners.broadcast(message));
+  new BroadcastChannel(TAGS_CHANNEL).addEventListener('message', (event) => relay(event.data));
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const reply = handle(message, sender);

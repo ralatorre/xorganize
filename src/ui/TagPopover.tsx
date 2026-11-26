@@ -1,130 +1,27 @@
-/**
- * The tag popover (DESIGN, 4.2): one per tab, opened from a tag button.
- *
- * Key and input events never reach this component through the page: the
- * keyboard guard stops them on the window and hands them to `onGuarded`
- * (src/inline/keyboard-guard.ts). Clicks inside reach it normally and are
- * stopped at its host on the way out.
- */
-
-import { render } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import type { TagSuggestion, TagSummary } from '@/src/db/types';
-import type { Theme } from '@/src/dom/theme';
-import { contain, type KeyboardGuard } from '@/src/inline/keyboard-guard';
+import type { TagSummary } from '@/src/db/types';
 import {
   keyAction,
   moveHighlight,
   nameOf,
   recentOf,
   rowsOf,
-  type Row,
+  type Suggestions,
 } from '@/src/inline/popover-model';
 import { placePopover } from '@/src/inline/position';
-import type { TagState } from '@/src/inline/tag-state';
 import type { TagEdit } from '@/src/inline/tagger';
 import { MAX_TAG_NAME } from '@/src/tags/names';
-import { tagColour } from '@/src/tags/palette';
-import { createShadowHost } from './shadow';
-import { POPOVER_STYLES } from './styles';
-import type { TagButton } from './tag-button';
+import type { PopoverDependencies } from './popover';
+import { PopoverRow } from './PopoverRow';
+import { TagDot } from './TagDot';
 
 /** How long typing must pause before suggestions are asked for. */
 export const SUGGEST_DELAY_MS = 80;
 
-export interface Suggestions {
-  suggestions: TagSuggestion[];
-  recent: TagSummary[];
-}
+export type GuardedHandler = (event: Event) => void;
 
-export interface PopoverDependencies {
-  state: TagState;
-  change(postId: string, edit: TagEdit): Promise<boolean>;
-  suggest(query: string): Promise<Suggestions | undefined>;
-  theme(): Theme;
-  guard: KeyboardGuard;
-  /** Where the popover's host is attached while open. */
-  mountPoint(): Element;
-  suggestDelayMs?: number;
-}
-
-export interface Popover {
-  /** Opens for the button's post, or closes if already open for it. */
-  toggle(anchor: TagButton): void;
-  close(returnFocus: boolean): void;
-}
-
-type GuardedHandler = (event: Event) => void;
-
-export function createPopover(deps: PopoverDependencies): Popover {
-  const { host, container } = createShadowHost(POPOVER_STYLES);
-  contain(host);
-  let onGuarded: GuardedHandler | undefined;
-  deps.guard.protect(host, (event) => onGuarded?.(event));
-
-  let anchor: TagButton | undefined;
-  let reposition: (() => void) | undefined;
-
-  const onPointerDown = (event: Event) => {
-    if (event.target !== host && event.target !== anchor?.host) close(false);
-  };
-  const onFocusIn = (event: Event) => {
-    if (event.target !== host && event.target !== anchor?.host) close(false);
-  };
-  const onMove = () => {
-    if (!anchor?.host.isConnected) close(false);
-    else reposition?.();
-  };
-
-  function close(returnFocus: boolean) {
-    const closing = anchor;
-    if (!closing) return;
-    anchor = undefined;
-    onGuarded = undefined;
-    reposition = undefined;
-    render(null, container);
-    host.remove(); // tag names are in the page's DOM only while the popover is open
-    window.removeEventListener('pointerdown', onPointerDown, true);
-    window.removeEventListener('focusin', onFocusIn, true);
-    window.removeEventListener('scroll', onMove, true);
-    window.removeEventListener('resize', onMove);
-    closing.setExpanded(false);
-    if (returnFocus) closing.button.focus({ preventScroll: true });
-  }
-
-  function open(next: TagButton) {
-    anchor = next;
-    container.dataset.theme = deps.theme();
-    deps.mountPoint().append(host);
-    render(
-      <TagPopover
-        postId={next.postId}
-        anchor={next.host}
-        deps={deps}
-        onClose={close}
-        handleGuarded={(handler) => (onGuarded = handler)}
-        handleReposition={(handler) => (reposition = handler)}
-      />,
-      container,
-    );
-    next.setExpanded(true);
-    window.addEventListener('pointerdown', onPointerDown, true);
-    window.addEventListener('focusin', onFocusIn, true);
-    window.addEventListener('scroll', onMove, { capture: true, passive: true });
-    window.addEventListener('resize', onMove, { passive: true });
-  }
-
-  return {
-    toggle(next) {
-      const same = anchor === next;
-      close(false);
-      if (!same) open(next);
-    },
-    close,
-  };
-}
-
-function TagPopover(props: {
+/** What the popover shows: the post's tags, a field to add more, and suggestions. */
+export function TagPopover(props: {
   postId: string;
   anchor: HTMLElement;
   deps: PopoverDependencies;
@@ -133,6 +30,7 @@ function TagPopover(props: {
   handleReposition(handler: () => void): void;
 }) {
   const { postId, deps } = props;
+  const { view } = deps;
   const [applied, setApplied] = useState<TagSummary[]>(() => deps.state.get(postId) ?? []);
   const [query, setQuery] = useState('');
   /** Suggestions, and the text they were found for. */
@@ -151,7 +49,7 @@ function TagPopover(props: {
 
   useEffect(() => {
     let live = true;
-    const timer = setTimeout(
+    const timer = view.setTimeout(
       () => {
         void deps.suggest(query).then((next) => {
           if (live && next) setFound({ ...next, query });
@@ -161,9 +59,9 @@ function TagPopover(props: {
     );
     return () => {
       live = false;
-      clearTimeout(timer);
+      view.clearTimeout(timer);
     };
-  }, [deps, query]);
+  }, [deps, view, query]);
 
   const rows = query.trim() === '' ? [] : rowsOf(query, found.suggestions, applied);
   const recent = query.trim() === '' ? recentOf(found.recent, applied) : [];
@@ -175,7 +73,7 @@ function TagPopover(props: {
     const place = placePopover(
       props.anchor.getBoundingClientRect(),
       { width: element.offsetWidth, height: element.offsetHeight },
-      { width: window.innerWidth, height: window.innerHeight },
+      { width: view.innerWidth, height: view.innerHeight },
     );
     element.style.top = `${place.top}px`;
     element.style.left = `${place.left}px`;
@@ -230,7 +128,7 @@ function TagPopover(props: {
       <div class="field">
         {applied.map((tag) => (
           <span class="chip" key={tag.id}>
-            <Dot colour={tag.color} />
+            <TagDot colour={tag.color} />
             <span>{tag.name}</span>
             <button
               type="button"
@@ -267,7 +165,7 @@ function TagPopover(props: {
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => apply(nameOf(row))}
           >
-            <RowContent row={row} />
+            <PopoverRow row={row} />
           </li>
         ))}
       </ul>
@@ -291,19 +189,4 @@ function TagPopover(props: {
       </div>
     </div>
   );
-}
-
-function RowContent({ row }: { row: Row }) {
-  if (row.kind === 'create') return <span class="name">+ Create “{row.name}”</span>;
-  return (
-    <>
-      <Dot colour={row.tag.color} />
-      <span class="name">{row.tag.name}</span>
-      <span class="uses">{row.tag.count.toLocaleString()}</span>
-    </>
-  );
-}
-
-function Dot({ colour }: { colour: number }) {
-  return <span class="dot" style={{ background: tagColour(colour) }} aria-hidden="true" />;
 }
