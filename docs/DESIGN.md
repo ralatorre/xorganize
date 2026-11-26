@@ -318,3 +318,5 @@ The post loses that source. Depending on the "Keep posts" setting it stays in th
 3. **Export is JSON and CSV in v1**, for the whole library or the current view. Markdown export is a later candidate.
 4. **The extension never writes to X.** Tagging a post does not bookmark or like it.
 5. **The side panel does not follow the page in v1.** It is a compact library and nothing more.
+6. **Deleting a tag removes the posts only it kept.** A post that is in the library only because it was tagged leaves when it loses its last tag, whether that tag is taken off or deleted. Keeping it would leave a post that no source and no tag lists, which nothing could show or clean up. A tag deletion never removes a bookmarked or liked post, and its confirmation states how many posts will leave (4.5).
+7. **Removing a post does not touch X.** Following decision 4, Remove from library does not unbookmark or unlike the post. A post still bookmarked or liked on X therefore comes back the next time that page is captured, and the confirmation says so (4.5). To keep it out, unbookmark or unlike it on X as well.
