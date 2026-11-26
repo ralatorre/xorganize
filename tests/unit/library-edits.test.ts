@@ -6,6 +6,7 @@ import { setPostTags } from '@/src/db/tags';
 import type { TagSummary } from '@/src/db/types';
 import { createLibraryEdits, type LibraryEdits } from '@/src/library/edits';
 import { POPOVER_SUGGESTIONS } from '@/src/inline/popover-model';
+import type { TagState } from '@/src/inline/tag-state';
 import { deletionImpact, deletionMessage, renameProblem } from '@/src/library/tag-actions';
 import { createLibraryTagging } from '@/src/library/tagging';
 import { rawPost } from '../fixtures/posts';
@@ -72,25 +73,23 @@ describe('createLibraryEdits', () => {
 
 describe('createLibraryTagging', () => {
   const tasks: Array<() => void> = [];
-  const flush = async () => {
+  /** Starts showing a post, and waits until its tags have been read. */
+  const shown = (state: TagState, postId: string) => {
+    const tags = new Promise<TagSummary[]>((resolve) => state.watch(postId, resolve));
     while (tasks.length > 0) tasks.shift()!();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    return tags;
   };
   const tagging = () =>
     createLibraryTagging({ edits, accountId: ACCOUNT, schedule: (task) => void tasks.push(task) });
 
   it('reads the tags of the post the popover shows', async () => {
     const { state } = tagging();
-    const seen: TagSummary[][] = [];
-    state.watch('1', (tags) => void seen.push(tags));
-    await flush();
-    expect(seen.at(-1)?.map((tag) => tag.name)).toEqual(['rust', 'go']);
+    expect((await shown(state, '1')).map((tag) => tag.name)).toEqual(['rust', 'go']);
   });
 
   it('saves a change, announces it, and shows what was saved', async () => {
     const { state, change } = tagging();
-    state.watch('2', () => {});
-    await flush();
+    await shown(state, '2');
     expect(await change('2', { add: ['go'], remove: ['tag-1'] })).toBe(true);
     expect(state.get('2')).toEqual([{ id: 'tag-2', name: 'go', color: 1 }]);
     expect(announced).toEqual([ACCOUNT]);
@@ -102,9 +101,8 @@ describe('createLibraryTagging', () => {
       accountId: ACCOUNT,
       schedule: (task) => void tasks.push(task),
     });
-    failing.state.watch('2', () => {});
-    await flush();
-    const before = failing.state.get('2');
+    const before = await shown(failing.state, '2');
+    expect(before.map((tag) => tag.name)).toEqual(['rust']);
     expect(await failing.change('2', { add: ['go'] })).toBe(false);
     expect(failing.state.get('2')).toEqual(before);
   });
