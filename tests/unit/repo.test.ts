@@ -445,15 +445,33 @@ describe('the order of a source', () => {
 
 describe('settings', () => {
   it('show images from X unless turned off', async () => {
-    expect(await readSettings(db)).toEqual({ remoteImages: true });
-    expect(await updateSettings(db, { remoteImages: false })).toEqual({ remoteImages: false });
-    expect(await readSettings(db)).toEqual({ remoteImages: false });
+    expect(await readSettings(db)).toEqual({ remoteImages: true, backupReminderDays: 30 });
+    expect(await updateSettings(db, { remoteImages: false })).toEqual({
+      remoteImages: false,
+      backupReminderDays: 30,
+    });
+    expect(await readSettings(db)).toEqual({ remoteImages: false, backupReminderDays: 30 });
+  });
+
+  it('remind of backups every 30 days unless set to one of the other choices', async () => {
+    for (const days of [7, 90, 0, 30]) {
+      expect(await updateSettings(db, { backupReminderDays: days })).toMatchObject({
+        backupReminderDays: days,
+      });
+      expect((await readSettings(db)).backupReminderDays).toBe(days);
+    }
+    await db.meta.put({ accountId: '', key: 'settings', value: { backupReminderDays: 12 } });
+    expect((await readSettings(db)).backupReminderDays).toBe(30);
   });
 
   it('fall back to defaults for values of the wrong type', async () => {
-    await db.meta.put({ accountId: '', key: 'settings', value: { remoteImages: 'no' } });
-    expect(await readSettings(db)).toEqual({ remoteImages: true });
+    await db.meta.put({
+      accountId: '',
+      key: 'settings',
+      value: { remoteImages: 'no', backupReminderDays: '7' },
+    });
+    expect(await readSettings(db)).toEqual({ remoteImages: true, backupReminderDays: 30 });
     await db.meta.put({ accountId: '', key: 'settings', value: 'garbage' });
-    expect(await readSettings(db)).toEqual({ remoteImages: true });
+    expect(await readSettings(db)).toEqual({ remoteImages: true, backupReminderDays: 30 });
   });
 });

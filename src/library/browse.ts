@@ -17,6 +17,7 @@ import {
   DEFAULT_SETTINGS,
   activeAccount,
   authorsOf,
+  backupTimes,
   readSettings,
   savedIds,
   sourceIds,
@@ -24,7 +25,14 @@ import {
 } from '@/src/db/repo';
 import type { LibraryDatabase } from '@/src/db/schema';
 import { tagIndex } from '@/src/db/tags';
-import type { AccountId, PostId, Settings, TagId, TagSuggestion } from '@/src/db/types';
+import type {
+  AccountId,
+  BackupTimes,
+  PostId,
+  Settings,
+  TagId,
+  TagSuggestion,
+} from '@/src/db/types';
 import { matchesToken, parseQuery } from '@/src/search/query';
 import { tagKey } from '@/src/tags/names';
 import {
@@ -55,6 +63,8 @@ export interface Catalogue {
   tags: readonly TagSuggestion[];
   /** The posts carrying each tag. */
   tagged: ReadonlyMap<TagId, ReadonlySet<PostId>>;
+  /** What the backup reminder counts from. */
+  backup: BackupTimes;
 }
 
 const NO_SETS: SourceSets = { bookmarks: new Set(), likes: new Set(), tagged: new Set() };
@@ -69,19 +79,21 @@ export const EMPTY_CATALOGUE: Catalogue = {
   counts: countSources(NO_SETS),
   tags: [],
   tagged: new Map(),
+  backup: {},
 };
 
 export async function loadCatalogue(db: LibraryDatabase): Promise<Catalogue> {
   const [account, settings] = await Promise.all([activeAccount(db), readSettings(db)]);
   if (account === undefined) return { ...EMPTY_CATALOGUE, settings };
 
-  return db.transaction('r', db.posts, db.tags, db.postTags, async () => {
-    const [bookmarks, likes, tagged, saved, tags] = await Promise.all([
+  return db.transaction('r', db.posts, db.tags, db.postTags, db.meta, async () => {
+    const [bookmarks, likes, tagged, saved, tags, backup] = await Promise.all([
       sourceIds(db, account, 'bookmark'),
       sourceIds(db, account, 'like'),
       taggedIds(db, account),
       savedIds(db, account),
       tagIndex(db, account),
+      backupTimes(db, account),
     ]);
     const sets: SourceSets = {
       bookmarks: new Set(bookmarks),
@@ -98,6 +110,7 @@ export async function loadCatalogue(db: LibraryDatabase): Promise<Catalogue> {
       counts: countSources(sets),
       tags: tags.tags,
       tagged: tags.posts,
+      backup,
     };
   });
 }

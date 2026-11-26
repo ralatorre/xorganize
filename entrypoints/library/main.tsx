@@ -1,20 +1,19 @@
 import { render } from 'preact';
 import { DIAGNOSTICS } from '@/src/build';
-import { updateSettings } from '@/src/db/repo';
+import { dismissBackupReminder, updateSettings } from '@/src/db/repo';
 import { library } from '@/src/db/schema';
 import type { AccountId, PostId } from '@/src/db/types';
 import { createDiagnosticsStore } from '@/src/diagnostics/store';
 import { createKeyboardGuard } from '@/src/inline/keyboard-guard';
 import { loadAuthorOrder, loadCatalogue } from '@/src/library/browse';
 import { createLibraryEdits } from '@/src/library/edits';
+import { createLibraryExport } from '@/src/library/exporter';
 import { createLibraryImport } from '@/src/library/importer';
 import { loadPosts } from '@/src/library/posts';
 import { createLibraryTagging } from '@/src/library/tagging';
 import { TAGS_CHANNEL, type TagsEditedNotice } from '@/src/messaging/protocol';
 import { createSearchClient } from '@/src/search/client';
-import { exportPosts, type ExportedFile } from '@/src/transfer/export';
-import type { ExportFormat } from '@/src/transfer/format';
-import type { ExportScope } from '@/src/transfer/read';
+import type { ExportedFile } from '@/src/transfer/export';
 import { createPopover } from '@/src/ui/popover';
 import { App } from './App';
 import { Diagnostics } from './Diagnostics';
@@ -31,6 +30,9 @@ const search = createSearchClient(
   new Worker(new URL('./search-worker.ts', import.meta.url), { type: 'module' }),
 );
 const setRemoteImages = (enabled: boolean) => void updateSettings(db, { remoteImages: enabled });
+const setBackupReminder = (days: number) => void updateSettings(db, { backupReminderDays: days });
+const dismissReminder = (accountId: AccountId) =>
+  void dismissBackupReminder(db, accountId, Date.now());
 
 const channel = new BroadcastChannel(TAGS_CHANNEL);
 const announce = (accountId: AccountId) =>
@@ -58,14 +60,7 @@ const save = (file: ExportedFile) => {
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_LIFETIME_MS);
 };
-const exportTo = (accountId: AccountId, scope: ExportScope, format: ExportFormat) =>
-  exportPosts(db, accountId, scope, format, new Date()).then(
-    (file) => {
-      save(file);
-      return file.count;
-    },
-    () => undefined,
-  );
+const exportTo = createLibraryExport(db, save, () => new Date());
 
 // Typing in the popover goes to the popover alone, not to the page's shortcuts.
 const guard = createKeyboardGuard(window);
@@ -93,6 +88,9 @@ if (root) {
       exportPosts={exportTo}
       importer={importer}
       setRemoteImages={setRemoteImages}
+      setBackupReminder={setBackupReminder}
+      dismissBackupReminder={dismissReminder}
+      now={Date.now}
     >
       {DIAGNOSTICS ? <Diagnostics store={createDiagnosticsStore(indexedDB)} /> : null}
     </App>,

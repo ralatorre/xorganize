@@ -1,11 +1,12 @@
 /**
  * The changes the library page makes: to a post's tags, to tags themselves,
- * and taking a post out. Each write is announced once it is done, so that
- * open x.com tabs catch up (`TAGS_CHANNEL`). The library's own lists follow
- * the database through live queries and need no announcement.
+ * taking a post out, and deleting everything. Each write is announced once
+ * it is done, so that open x.com tabs catch up (`TAGS_CHANNEL`). The
+ * library's own lists follow the database through live queries and need no
+ * announcement.
  */
 
-import { removePost } from '@/src/db/repo';
+import { deleteAllData, removePost } from '@/src/db/repo';
 import type { LibraryDatabase } from '@/src/db/schema';
 import {
   deleteTag,
@@ -38,6 +39,8 @@ export interface LibraryEdits {
   merge(accountId: AccountId, fromId: TagId, intoId: TagId): Promise<boolean>;
   deleteTag(accountId: AccountId, tagId: TagId): Promise<TagDeletion>;
   removePost(accountId: AccountId, postId: PostId): Promise<void>;
+  /** Deletes every account's library, keeping settings. */
+  deleteAll(): Promise<void>;
 }
 
 /** `announce` is called with the account after each write that changed something. */
@@ -71,5 +74,8 @@ export function createLibraryEdits(
       announced(accountId, mergeTags(db, accountId, fromId, intoId), (done) => done),
     deleteTag: (accountId, tagId) => announced(accountId, deleteTag(db, accountId, tagId)),
     removePost: (accountId, postId) => announced(accountId, removePost(db, accountId, postId)),
+    deleteAll: async () => {
+      for (const accountId of await deleteAllData(db)) announce(accountId);
+    },
   };
 }

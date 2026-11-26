@@ -239,3 +239,119 @@ test('a backup restores the library in a clean profile', async ({ context, exten
     await clean.close();
   }
 });
+
+/** The library's stored rows of a table, read from the page. */
+const rows = (page: Page, table: string) =>
+  page.evaluate(
+    (name) =>
+      new Promise<unknown[]>((resolve, reject) => {
+        const request = indexedDB.open('xorganize');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const read = db.transaction(name).objectStore(name).getAll();
+          read.onsuccess = () => {
+            db.close();
+            resolve(read.result);
+          };
+          read.onerror = () => reject(read.error);
+        };
+      }),
+    table,
+  );
+
+test('reminds of a backup until one is made, put off, or turned off', async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await openLibrary(page, extensionId); // its posts were saved long ago, and never backed up
+  const reminder = page.getByRole('complementary', { name: 'Backup reminder' });
+  await expect(reminder).toContainText('Your library has not been backed up yet.');
+
+  // Backing up from the reminder saves the file and the reminder goes.
+  const [file] = await Promise.all([
+    page.waitForEvent('download'),
+    reminder.getByRole('button', { name: 'Back up now' }).click(),
+  ]);
+  expect(file.suggestedFilename()).toMatch(/\.json$/);
+  await expect(reminder).toBeHidden();
+  await page.reload();
+  await expect(page.locator('.posts .post__text')).toHaveCount(3);
+  await expect(reminder).toBeHidden();
+
+  // A CSV is not a backup; neither is a view's file. Neither resets it.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('xorganize');
+        request.onsuccess = () => {
+          const db = request.result;
+          const write = db.transaction('meta', 'readwrite');
+          write.objectStore('meta').delete(['9000000000000000001', 'lastBackupAt']);
+          write.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          write.onerror = () => reject(write.error);
+        };
+      }),
+  );
+  // Written past Dexie, so the page reads it again only on reload.
+  await page.reload();
+  await expect(reminder).toBeVisible();
+  await download(page, 'Export library', 'CSV');
+  await download(page, 'Export view', 'JSON');
+  await expect(reminder).toBeVisible();
+
+  // Put off: gone, and still gone after a reload.
+  await reminder.getByRole('button', { name: 'Remind me later' }).click();
+  await expect(reminder).toBeHidden();
+  await page.reload();
+  await expect(page.locator('.posts .post__text')).toHaveCount(3);
+  await expect(reminder).toBeHidden();
+
+  // Turned off: the setting is kept.
+  const setting = page.getByRole('combobox', { name: /Backup reminder/ });
+  await expect(setting).toHaveValue('30');
+  await setting.selectOption({ label: 'Never' });
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: /Backup reminder/ })).toHaveValue('0');
+});
+
+test('deletes all data once the word is typed, keeping settings', async ({
+  context,
+  extensionId,
+}) => {
+  const page = await context.newPage();
+  await openLibrary(page, extensionId);
+  await page.getByRole('checkbox', { name: /Show images from X/ }).uncheck();
+
+  await page.getByRole('button', { name: 'Delete all data…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Delete all data?' });
+  await expect(dialog).toContainText('Settings are kept');
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  const remove = dialog.getByRole('button', { name: 'Delete all data' });
+  await expect(remove).toBeDisabled();
+
+  // Cancelled: nothing changes.
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.posts .post__text')).toHaveCount(3);
+
+  await page.getByRole('button', { name: 'Delete all data…' }).click();
+  const input = dialog.getByRole('textbox', { name: 'Type “delete” to confirm' });
+  await input.fill('delet');
+  await expect(remove).toBeDisabled();
+  await input.fill('delete');
+  await expect(remove).toBeEnabled();
+  await input.press('Enter');
+
+  await expect(page.getByRole('heading', { name: 'Your library is empty' })).toBeVisible();
+  expect(await rows(page, 'posts')).toEqual([]);
+  expect(await rows(page, 'tags')).toEqual([]);
+  expect(await rows(page, 'postTags')).toEqual([]);
+  expect(await rows(page, 'meta')).toEqual([
+    { accountId: '', key: 'settings', value: { remoteImages: false, backupReminderDays: 30 } },
+  ]);
+});

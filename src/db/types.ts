@@ -75,6 +75,18 @@ export interface Counts {
 export interface Settings {
   /** Show avatars and media thumbnails, which the browser loads from X's image server. */
   remoteImages: boolean;
+  /** Days after the last backup before the library reminds the user to make one. 0: never. */
+  backupReminderDays: number;
+}
+
+/** When the account's library was last backed up, and what else the backup reminder counts from. */
+export interface BackupTimes {
+  /** The last whole-library JSON export. */
+  lastBackupAt?: number;
+  /** When the reminder was last put off. */
+  dismissedAt?: number;
+  /** When the oldest post in the library entered it. */
+  startedAt?: number;
 }
 
 /** What is shown of a tag on a post: enough to draw a chip. */
