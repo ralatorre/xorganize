@@ -270,6 +270,52 @@ export async function authorsOf(
 }
 
 /**
+ * Up to `limit` of the account's posts with IDs after `afterId`, in ID order.
+ * Search reads the library a page at a time this way, so that no one read
+ * holds every post.
+ */
+export function postsAfter(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  afterId: PostId,
+  limit: number,
+): Promise<StoredPost[]> {
+  return db.posts
+    .where('[accountId+id]')
+    .between([accountId, afterId], [accountId, Dexie.maxKey], false, true)
+    .limit(limit)
+    .toArray();
+}
+
+export interface PostChanges {
+  /** Every stored post's ID, so that removed posts can be told apart. */
+  ids: PostId[];
+  /** The posts stored from X at or after the given time. */
+  changed: StoredPost[];
+}
+
+/** What search needs to catch up: which posts exist, and which were stored since `since`. */
+export function postChanges(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  since: number,
+): Promise<PostChanges> {
+  return db.transaction('r', db.posts, async () => {
+    const [keys, changed] = await Promise.all([
+      db.posts
+        .where('[accountId+id]')
+        .between(...allOf(accountId))
+        .primaryKeys(),
+      db.posts
+        .where('[accountId+lastSeenAt]')
+        .between([accountId, since], [accountId, Dexie.maxKey])
+        .toArray(),
+    ]);
+    return { ids: idsOf(keys), changed };
+  });
+}
+
+/**
  * Records the account whose library the page shows. Called inside any write
  * that stores a post, which must include the `meta` table.
  */

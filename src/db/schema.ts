@@ -9,6 +9,15 @@ import type { Meta, PostTag, StoredPost, Tag } from './types';
  * Changing a table or an index means adding a new `version(n)` with an
  * upgrade function. Published versions are never edited.
  */
+const POST_INDEXES_V1 = [
+  '[accountId+id]',
+  '[accountId+isBookmark+bookmarkSort]',
+  '[accountId+isLike+likeSort]',
+  '[accountId+hasTags+savedAt]',
+  '[accountId+savedAt]',
+  '[accountId+author.handle]',
+];
+
 export class LibraryDatabase extends Dexie {
   posts!: Table<StoredPost, [string, string]>;
   tags!: Table<Tag, [string, string]>;
@@ -18,17 +27,15 @@ export class LibraryDatabase extends Dexie {
   constructor(name = 'xorganize') {
     super(name);
     this.version(1).stores({
-      posts: [
-        '[accountId+id]',
-        '[accountId+isBookmark+bookmarkSort]',
-        '[accountId+isLike+likeSort]',
-        '[accountId+hasTags+savedAt]',
-        '[accountId+savedAt]',
-        '[accountId+author.handle]',
-      ].join(', '),
+      posts: POST_INDEXES_V1.join(', '),
       tags: '[accountId+id], &[accountId+nameKey], [accountId+lastUsedAt]',
       postTags: '[accountId+postId+tagId], [accountId+tagId+taggedAt], [accountId+postId]',
       meta: '[accountId+key]',
+    });
+    // Version 2: posts by when they were last stored from X, so that search
+    // can re-read only what changed (docs/SPEC.md, 7.7 and 11).
+    this.version(2).stores({
+      posts: [...POST_INDEXES_V1, '[accountId+lastSeenAt]'].join(', '),
     });
   }
 }

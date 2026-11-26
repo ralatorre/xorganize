@@ -3,9 +3,15 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { normalisePost } from '@/src/capture/normalise';
 import { authorsOf, saveCapture, savedIds, taggedIds, updateSettings } from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
-import { postsWithTag, setPostTags, tagCounts } from '@/src/db/tags';
+import { setPostTags, tagIndex } from '@/src/db/tags';
 import type { TagSuggestion } from '@/src/db/types';
-import { EMPTY_BROWSE, loadBrowse } from '@/src/library/browse';
+import {
+  EMPTY_CATALOGUE,
+  browseView,
+  loadAuthorOrder,
+  loadCatalogue,
+  type Found,
+} from '@/src/library/browse';
 import { PAGE_SIZE, pageSpan } from '@/src/library/paging';
 import { loadPosts } from '@/src/library/posts';
 import {
@@ -25,6 +31,7 @@ import {
   isFiltered,
   type View,
 } from '@/src/library/view';
+import { MAX_QUERY } from '@/src/search/query';
 import { rawPost, type RawPostOptions } from '../fixtures/posts';
 
 const ACCOUNT = '9000000000000000001';
@@ -64,7 +71,13 @@ describe('changeView', () => {
     expect(changeView(tagged('a', 'b'), { type: 'untag', tagId: 'a' }).tags).toEqual(['b']);
     expect(changeView(DEFAULT_VIEW, { type: 'match', match: 'any' }).match).toBe('any');
     expect(changeView(DEFAULT_VIEW, { type: 'sort', sort: 'author' }).sort).toBe('author');
-    const busy: View = { source: 'likes', tags: ['a'], match: 'any', sort: 'posted' };
+    const busy: View = {
+      source: 'likes',
+      tags: ['a'],
+      match: 'any',
+      query: 'rust',
+      sort: 'posted',
+    };
     expect(changeView(busy, { type: 'clear' })).toEqual({
       ...DEFAULT_VIEW,
       match: 'any',
@@ -77,6 +90,15 @@ describe('changeView', () => {
     expect(isFiltered({ ...DEFAULT_VIEW, sort: 'author' })).toBe(false);
     expect(isFiltered({ ...DEFAULT_VIEW, source: 'bookmarks' })).toBe(true);
     expect(isFiltered(tagged('a'))).toBe(true);
+    expect(isFiltered({ ...DEFAULT_VIEW, query: 'rust' })).toBe(true);
+    expect(isFiltered({ ...DEFAULT_VIEW, query: '   ' })).toBe(false);
+  });
+
+  it('keeps what is typed, up to the longest query, and clears it with the filters', () => {
+    expect(changeView(DEFAULT_VIEW, { type: 'query', query: ' #rust ' }).query).toBe(' #rust ');
+    expect(
+      changeView(DEFAULT_VIEW, { type: 'query', query: 'x'.repeat(MAX_QUERY + 9) }).query,
+    ).toHaveLength(MAX_QUERY);
   });
 });
 
@@ -232,6 +254,10 @@ describe('reading the library', () => {
   const post = (id: string, options: Partial<RawPostOptions> = {}) =>
     normalisePost(rawPost({ id, ...options }))!;
 
+  /** What the library shows for a view, read the way the page reads it. */
+  const loadBrowse = async (view: View, found?: Found) =>
+    browseView(await loadCatalogue(db), view, found);
+
   const save = (
     source: 'bookmark' | 'like',
     items: Array<[id: string, sortIndex: string, options?: Partial<RawPostOptions>]>,
@@ -280,13 +306,14 @@ describe('reading the library', () => {
 
   it('lists tags by name with their counts, and the posts carrying each', async () => {
     await sample();
-    expect(await tagCounts(db, ACCOUNT)).toEqual([
+    const index = await tagIndex(db, ACCOUNT);
+    expect(index.tags).toEqual([
       { id: 'tag-2', name: 'go', color: 1, count: 1 },
       { id: 'tag-1', name: 'Rust', color: 0, count: 2 },
     ]);
-    expect((await postsWithTag(db, ACCOUNT, 'tag-1')).sort()).toEqual(['12', '31']);
-    expect(await postsWithTag(db, ACCOUNT, 'missing')).toEqual([]);
-    expect(await tagCounts(db, OTHER)).toEqual([]);
+    expect([...(index.posts.get('tag-1') ?? [])].sort()).toEqual(['12', '31']);
+    expect(index.posts.has('missing')).toBe(false);
+    expect((await tagIndex(db, OTHER)).tags).toEqual([]);
   });
 
   it('reads IDs from indexes alone', async () => {
@@ -304,15 +331,16 @@ describe('reading the library', () => {
 
   it('is empty, with the stored settings, before anything is captured', async () => {
     await updateSettings(db, { remoteImages: false });
-    expect(await loadBrowse(db, DEFAULT_VIEW)).toEqual({
-      ...EMPTY_BROWSE,
+    expect(await loadCatalogue(db)).toEqual({
+      ...EMPTY_CATALOGUE,
       settings: { remoteImages: false },
     });
+    expect((await loadBrowse(DEFAULT_VIEW)).ids).toEqual([]);
   });
 
   it('counts sources and tags, and lists every post newest in the library first', async () => {
     await sample();
-    const browse = await loadBrowse(db, DEFAULT_VIEW);
+    const browse = await loadBrowse(DEFAULT_VIEW);
     expect(browse.account).toBe(ACCOUNT);
     expect(browse.counts).toEqual({ all: 5, bookmarks: 3, likes: 2, tagged: 1, untagged: 3 });
     expect(browse.tags.map((tag) => [tag.name, tag.count])).toEqual([
@@ -326,16 +354,16 @@ describe('reading the library', () => {
 
   it('keeps each timeline in its own order', async () => {
     await sample();
-    const bookmarks = await loadBrowse(db, { ...DEFAULT_VIEW, source: 'bookmarks' });
+    const bookmarks = await loadBrowse({ ...DEFAULT_VIEW, source: 'bookmarks' });
     expect(bookmarks.ids).toEqual(['13', '12', '11']);
-    const likes = await loadBrowse(db, { ...DEFAULT_VIEW, source: 'likes' });
+    const likes = await loadBrowse({ ...DEFAULT_VIEW, source: 'likes' });
     expect(likes.ids).toEqual(['21', '11']);
   });
 
   it('shows tagged-only and untagged posts', async () => {
     await sample();
-    expect((await loadBrowse(db, { ...DEFAULT_VIEW, source: 'tagged' })).ids).toEqual(['31']);
-    expect((await loadBrowse(db, { ...DEFAULT_VIEW, source: 'untagged' })).ids).toEqual([
+    expect((await loadBrowse({ ...DEFAULT_VIEW, source: 'tagged' })).ids).toEqual(['31']);
+    expect((await loadBrowse({ ...DEFAULT_VIEW, source: 'untagged' })).ids).toEqual([
       '21',
       '13',
       '11',
@@ -344,36 +372,78 @@ describe('reading the library', () => {
 
   it('sorts by post date and by author', async () => {
     await sample();
-    expect((await loadBrowse(db, { ...DEFAULT_VIEW, sort: 'posted' })).ids).toEqual([
+    expect((await loadBrowse({ ...DEFAULT_VIEW, sort: 'posted' })).ids).toEqual([
       '31',
       '21',
       '13',
       '12',
       '11',
     ]);
-    expect(
-      (await loadBrowse(db, { ...DEFAULT_VIEW, source: 'bookmarks', sort: 'author' })).ids,
-    ).toEqual(['12', '11', '13']);
+    const byAuthor = await loadAuthorOrder(db, ACCOUNT);
+    const author = { ...DEFAULT_VIEW, source: 'bookmarks', sort: 'author' } as const;
+    expect((await loadBrowse(author, { byAuthor })).ids).toEqual(['12', '11', '13']);
+    // Until the authors are read, the saved order stands in.
+    expect((await loadBrowse(author)).ids).toEqual(['13', '12', '11']);
   });
 
   it('filters by tags, all or any, within the source', async () => {
     await sample();
-    const rust = await loadBrowse(db, { ...DEFAULT_VIEW, tags: ['tag-1'] });
+    const rust = await loadBrowse({ ...DEFAULT_VIEW, tags: ['tag-1'] });
     expect(rust.ids).toEqual(['31', '12']);
     expect(rust.selected.map((tag) => tag.name)).toEqual(['Rust']);
 
     const both = { ...DEFAULT_VIEW, tags: ['tag-2', 'tag-1'] };
-    expect((await loadBrowse(db, both)).ids).toEqual(['12']);
-    expect((await loadBrowse(db, both)).selected.map((tag) => tag.name)).toEqual(['go', 'Rust']);
-    expect((await loadBrowse(db, { ...both, match: 'any' })).ids).toEqual(['31', '12']);
-    expect((await loadBrowse(db, { ...both, source: 'tagged' })).ids).toEqual([]);
+    expect((await loadBrowse(both)).ids).toEqual(['12']);
+    expect((await loadBrowse(both)).selected.map((tag) => tag.name)).toEqual(['go', 'Rust']);
+    expect((await loadBrowse({ ...both, match: 'any' })).ids).toEqual(['31', '12']);
+    expect((await loadBrowse({ ...both, source: 'tagged' })).ids).toEqual([]);
   });
 
   it('leaves out a selected tag that no longer exists', async () => {
     await sample();
-    const browse = await loadBrowse(db, { ...DEFAULT_VIEW, tags: ['gone', 'tag-2'] });
+    const browse = await loadBrowse({ ...DEFAULT_VIEW, tags: ['gone', 'tag-2'] });
     expect(browse.selected.map((tag) => tag.id)).toEqual(['tag-2']);
     expect(browse.ids).toEqual(['12']);
+  });
+
+  describe('with a search', () => {
+    const searched = async (query: string, view: Partial<View> = {}) =>
+      (await loadBrowse({ ...DEFAULT_VIEW, ...view, query })).ids;
+
+    it('filters by `#` tags, the last one by how its name starts', async () => {
+      await sample();
+      expect(await searched('#rust')).toEqual(['31', '12']);
+      expect(await searched('#RU')).toEqual(['31', '12']);
+      expect(await searched('#ru ')).toEqual([]);
+      expect(await searched('#rust #go')).toEqual(['12']);
+      expect(await searched('#go #ru')).toEqual(['12']);
+      expect(await searched('#nothing')).toEqual([]);
+      expect(await searched('#')).toEqual(['31', '21', '13', '12', '11']);
+    });
+
+    it('matches a quoted tag name with spaces', async () => {
+      await sample();
+      await tag('13', ['to read']);
+      expect(await searched('#"to read"')).toEqual(['13']);
+      expect(await searched('#"to r')).toEqual(['13']);
+    });
+
+    it('keeps the posts the search worker found, in the view order and with the other filters', async () => {
+      await sample();
+      const matches = new Set(['11', '12', '13', '31', '99']);
+      const view = { ...DEFAULT_VIEW, query: 'anything' };
+      expect((await loadBrowse(view, { matches })).ids).toEqual(['31', '13', '12', '11']);
+      expect((await loadBrowse({ ...view, source: 'bookmarks' }, { matches })).ids).toEqual([
+        '13',
+        '12',
+        '11',
+      ]);
+      expect((await loadBrowse({ ...view, query: 'x #rust' }, { matches })).ids).toEqual([
+        '31',
+        '12',
+      ]);
+      expect((await loadBrowse({ ...view, tags: ['tag-2'] }, { matches })).ids).toEqual(['12']);
+    });
   });
 
   it('shows only the active account, and not posts kept only because they are quoted', async () => {
@@ -392,7 +462,7 @@ describe('reading the library', () => {
     await save('bookmark', [['51', '1']], OTHER);
     await save('bookmark', [['14', '9200']]);
 
-    const browse = await loadBrowse(db, DEFAULT_VIEW);
+    const browse = await loadBrowse(DEFAULT_VIEW);
     expect(browse.ids).not.toContain('40');
     expect(browse.ids).not.toContain('51');
     expect(browse.counts.all).toBe(7);

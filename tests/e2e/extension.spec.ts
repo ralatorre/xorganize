@@ -162,6 +162,40 @@ test('the browser blocks network requests from the background worker', async ({
   expect(outcome).toEqual({ fetched: 'refused', violation: 'connect-src https://x.com/' });
 });
 
+test("the browser blocks network requests from the library's search worker", async ({
+  context,
+  extensionId,
+}) => {
+  await context.route('https://x.com/**', (route) =>
+    route.fulfill({ contentType: 'text/plain', body: 'reached' }),
+  );
+  const page = await context.newPage();
+  const worker = page.waitForEvent('worker');
+  await page.goto(`chrome-extension://${extensionId}/library.html`);
+
+  const outcome = await (
+    await worker
+  ).evaluate(async () => {
+    const violation = new Promise<string>((resolve) => {
+      self.addEventListener(
+        'securitypolicyviolation',
+        (event) => {
+          const { effectiveDirective, blockedURI } = event as SecurityPolicyViolationEvent;
+          resolve(`${effectiveDirective} ${blockedURI}`);
+        },
+        { once: true },
+      );
+    });
+    const fetched = await fetch('https://x.com/').then(
+      () => 'allowed',
+      () => 'refused',
+    );
+    return { fetched, violation: await violation };
+  });
+
+  expect(outcome).toEqual({ fetched: 'refused', violation: 'connect-src https://x.com/' });
+});
+
 test('the three parts connect on x.com without the page being able to tell', async ({
   context,
   serviceWorker,

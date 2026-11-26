@@ -225,6 +225,30 @@ a:focus-visible {
 
 /* Above the list */
 
+.search {
+  margin: 0 0 12px;
+}
+
+.search__input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+}
+
+.search__input::placeholder {
+  color: var(--muted);
+}
+
+.search__input:focus-visible {
+  outline-offset: 0;
+  background: var(--bg);
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;

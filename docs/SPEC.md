@@ -26,7 +26,7 @@ The extension makes no network requests of its own, loads no remote code, and ha
 | Styling | Plain CSS with custom properties, in a shadow root | No runtime styling cost, full isolation from X's CSS. |
 | Storage | IndexedDB through Dexie 4 | Compound indexes, migrations, cross-context live queries. |
 | Validation | Hand-written type guards, with size caps | Enough for the messages that exist today. A schema library (Valibot) is to be added when importing files needs it (M4). |
-| Search | MiniSearch | In-memory full-text index, sufficient at the target scale. |
+| Search | Our own substring index, in a web worker | No dependency. A search narrows the chosen view rather than ranking results, so a full-text library's tokenising and scoring would go unused. Its word splitting would also miss languages written without spaces. Measured at 50,000 posts: 1.3 s to read the library in the worker, then a few milliseconds per search (11). |
 | List virtualisation | `@tanstack/virtual-core` | Renders only the rows near the viewport. No dependencies of its own; reads `navigator` only to detect iOS, and makes no network, storage or messaging calls. |
 | Tests | Vitest (unit), Playwright (end to end against a mock site) | |
 | Tooling | pnpm, ESLint, Prettier | |
@@ -111,10 +111,10 @@ Why this split:
 │   ├── messaging/
 │   │   ├── protocol.ts            # message types + Valibot schemas
 │   │   └── client.ts
-│   ├── library/                   # what the library page shows: snapshot, thumbnails, format
+│   ├── library/                   # what the library page shows: catalogue, views, thumbnails, format
 │   ├── worker/
 │   │   └── handler.ts             # routes runtime messages in the background worker
-│   ├── search/
+│   ├── search/                    # query parsing, the search worker's index, page-worker messages
 │   ├── transfer/                  # export / import
 │   ├── settings/
 │   └── ui/                        # components shared by content UI and pages
@@ -184,7 +184,7 @@ Rule for changes: a new permission, host, or manifest key needs its reason added
 
 The policy applies to every extension page and to the background worker.
 
-- `connect-src 'none'`: the browser refuses any network request from extension code. "Nothing leaves the device" is enforced by the browser, not only promised by the code.
+- `connect-src 'none'`: the browser refuses any network request from extension code. "Nothing leaves the device" is enforced by the browser, not only promised by the code. The library's search worker runs under the same policy, and a test confirms it.
 - `default-src 'none'` with `'self'` for scripts, styles, images and fonts: only files packaged with the extension can load. No remote code, no inline script, no `eval`.
 - `img-src` also allows `https://pbs.twimg.com`, X's image server, and nothing else. See below.
 - `base-uri`, `form-action`, `frame-ancestors` are `'none'`: pages cannot be re-based, cannot submit forms anywhere, and cannot be framed.
@@ -412,7 +412,7 @@ interface Post {
   partial: boolean;                  // built from the DOM fallback
   unavailable: boolean;              // tombstoned on X
   firstSeenAt: number;
-  lastSeenAt: number;
+  lastSeenAt: number;                // set by every capture; search reads posts changed since
   savedAt: number;                   // when it entered the library
 }
 
@@ -461,6 +461,10 @@ db.version(1).stores({
   postTags: "[accountId+postId+tagId], [accountId+tagId+taggedAt], [accountId+postId]",
   meta: "[accountId+key]",
 });
+
+// Posts by when they were last stored from X, so that search re-reads only
+// what changed (11). The field already existed, so nothing needs upgrading.
+db.version(2).stores({ posts: "<the version 1 indexes>, [accountId+lastSeenAt]" });
 ```
 
 Rules:
@@ -497,9 +501,18 @@ The worker checks `sender.id`, that the message comes from the top frame, and th
 ## 11. Library application
 
 - **Data access.** Opens Dexie directly. Lists are driven by live queries, so changes made on x.com appear without a reload.
-- **Filtering** (built, `src/library/browse.ts` and `select.ts`). The page lists post IDs, not posts. Each source's IDs come from its index alone: bookmarks and likes from their sort indexes, tagged posts from `hasTags`. "All" is their union, so posts stored only because a saved post quotes them are never listed. "Tagged only" is tagged with neither source, "Untagged" has a source and no tag. Each selected tag's posts come from the `postTags` index, and are intersected (Match All) or united (Match Any) in memory. Tag counts come from one pass over the same index.
-- **Order** (built). "Saved" is the timeline's own order for Bookmarks and Likes, and the order posts entered the library (`savedAt`) otherwise. "Post date" sorts by post ID: X's IDs grow with time, so no date index is needed. "Author" reads handles from the `author.handle` index and sorts them ignoring case, each author's posts newest first.
-- **Search** (to be built). On open, a MiniSearch index is built in a web worker from `text`, `author.handle` and `author.name` for the current account. It is updated incrementally from live-query changes. The query parser lifts `#tag` and `@handle` tokens out as structured filters and passes the rest to MiniSearch with prefix matching on the final term. Expected cost at 50,000 posts: an index build of a second or two, off the main thread, with the unfiltered list shown immediately.
+- **Filtering** (built, `src/library/browse.ts` and `select.ts`). The page lists post IDs, not posts. It reads a catalogue once each time the library changes, from the indexes alone:
+  - bookmarks and likes from their sort indexes, tagged posts from `hasTags`, and every post in the order it was saved;
+  - every tag with the posts carrying it, from one pass over the `postTags` index.
+
+  Every view is then worked out from the catalogue in memory, so a change of source, tag, sort or search takes tens of milliseconds at 50,000 posts. Reading the catalogue takes about a second at that size, and is not repeated per view. "All" is the union of the sources, so posts stored only because a saved post quotes them are never listed. "Tagged only" is tagged with neither source, "Untagged" has a source and no tag. Selected tags are intersected (Match All) or united (Match Any).
+- **Order** (built). "Saved" is the timeline's own order for Bookmarks and Likes, and the order posts entered the library (`savedAt`) otherwise. "Post date" sorts by post ID: X's IDs grow with time, so no date index is needed. "Author" reads handles from the `author.handle` index and sorts them ignoring case, each author's posts newest first. Reading handles walks the index one entry at a time (about 2 s at 50,000 posts), so it happens only while that order is chosen, with the saved order shown until it is ready.
+- **Search** (built, `src/search/`). The query parser (`query.ts`) lifts out `#tag` and `@handle` tokens. Double quotes keep spaces in a phrase or a tag name, and the last token, while still being typed, matches by how names start.
+  - **Tags** are matched against the catalogue on the page.
+  - **Text and authors** go to a web worker (`entrypoints/library/search-worker.ts`, logic in `service.ts`). It opens the database itself, reads the account's posts a page of 1,000 at a time, and holds each post's text, handle and name, lower-cased and without accents. A post matches when it contains every term, anywhere in a word; `@` handles must match one of those given.
+  - **Keeping current.** The worker watches the IDs and the posts stored since it last read, through the `lastSeenAt` index and a live query. A new, changed or removed post therefore updates the results while the page is open, without re-reading the library.
+  - **Cost** at 50,000 posts, measured in Chromium: 1.3 s to read the library, off the main thread, while the list is already shown. After that, 25–45 ms from a keystroke to the updated list, and about 26 MB of text in the worker.
+  - **Messages.** Both directions are checked (`protocol.ts`) and capped at 50 terms of 500 characters each. Each search carries a sequence number, so a late answer to an earlier one is ignored.
 - **Rendering** (built). A list that scrolls with the page and renders only the cards near the viewport, with measured heights. Post contents, tags and quoted posts are read only for those cards, a page of 25 at a time, so memory does not grow with the library. Long text is cut to four lines with Show more. Avatars and thumbnails are loaded lazily from X's image server without cookies or a referrer (6.2). These image loads are the only network activity. They are issued by the browser for `<img>` elements, not by extension code, and can be turned off in settings. Photos are requested at X's `small` size. Up to four thumbnails are shown per post.
 - **Sharing code.** The side panel imports the same app with a `compact` flag. The tag popover and tag chip components are shared with the injected UI.
 
@@ -590,7 +603,7 @@ Privacy statement for the store listing and README: the extension collects nothi
 | Unit: capture | Extraction and normalisation against synthetic fixtures for every operation, including each alternate field location, tombstones, promoted entries, quoted posts, long-form text and malformed input. |
 | Unit: database | Upsert merge rules, tag transactions, `hasTags` maintenance, migrations (using `fake-indexeddb`). |
 | Unit: transfer | Round-trip export and import, merge and replace, scoped export, CSV quoting and formula neutralisation, rejection of invalid files. |
-| Unit: search | Query parsing and filter composition. |
+| Unit: search | Query parsing, the text index, worker messages, the worker's reading and catching up, and combining search with the view. |
 | Component | Tag popover keyboard behaviour and accessibility roles. |
 | End to end | Playwright loads the built extension into headless Chromium. Requests to `https://x.com/*` are intercepted and answered from `tests/e2e/mock-site`, static pages that imitate x.com's markup, plus fixture responses. The content scripts therefore run under the real URL without the real site ever being contacted, and the suite passes with no network. Covers capture, inline tagging, the library and export. |
 | Manual | A checklist run against live x.com before each release, since automated tests cannot use a real account. |
@@ -626,7 +639,7 @@ The repository is public, so the following never get committed:
 | M0 Skeleton | WXT project, both content scripts, service worker, empty library page, CI. | The extension loads and CI is green. |
 | M1 Capture | Interceptor, bridge, extraction, normalisation, database, account detection, capture banner without auto-scroll, for both the Bookmarks and Likes timelines. Verify every assumption in section 18. | Scrolling the Bookmarks page and the Likes tab fills the database, confirmed against a real free account. |
 | M2 Tagging | Tag button, popover, seen cache, DOM fallback, tag messages. **Built.** Confirmed against a real account on 2026-11-25, except Alt+T with `j`/`k` focus. | A post can be tagged from any timeline and the state survives a reload. |
-| M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. Avatars and thumbnails were brought forward and are done. **Browsing built**: sources, tag sidebar with groups, tag filters, sort, tag chips and quoted posts on cards, virtualised list. Search and tag management to follow. | A tagged post can be found by tag and by text. |
+| M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. Avatars and thumbnails were brought forward and are done. **Browsing built**: sources, tag sidebar with groups, tag filters, sort, tag chips and quoted posts on cards, virtualised list. **Search built**: text, `#tag` and `@handle`, the `/` shortcut. Tag management to follow. | A tagged post can be found by tag and by text. |
 | M4 Export | JSON and CSV export for the whole library and the current view, import with merge and replace, backup reminder, delete all. | Export then import into a clean profile reproduces the library, and a single tag can be exported to CSV. |
 | M5 Live capture | Bookmark and like mutations, tag prompt toast, auto-scroll. | Bookmarking or liking a post anywhere adds it without visiting the Bookmarks or Likes page. |
 | M6 Release | Side panel, popup, settings, welcome page, bulk actions, accessibility pass, Firefox build, store listing. | Published to the Chrome Web Store and Firefox Add-ons. |

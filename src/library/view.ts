@@ -1,10 +1,11 @@
 /**
  * What the library is showing (DESIGN, 4.5): which source, which tags and how
- * they combine, and in what order. Changes to it are pure, so the page holds
- * no filtering rules of its own.
+ * they combine, what was searched for, and in what order. Changes to it are
+ * pure, so the page holds no filtering rules of its own.
  */
 
 import type { TagId } from '@/src/db/types';
+import { MAX_QUERY } from '@/src/search/query';
 
 /** The sidebar's sources. They are exclusive: exactly one is selected. */
 export const SOURCE_FILTERS = ['all', 'bookmarks', 'likes', 'tagged', 'untagged'] as const;
@@ -21,10 +22,18 @@ export interface View {
   /** Selected tags, in the order they were selected. */
   tags: readonly TagId[];
   match: TagMatch;
+  /** What is typed in the search box, as typed (src/search/query.ts). */
+  query: string;
   sort: SortOrder;
 }
 
-export const DEFAULT_VIEW: View = { source: 'all', tags: [], match: 'all', sort: 'saved' };
+export const DEFAULT_VIEW: View = {
+  source: 'all',
+  tags: [],
+  match: 'all',
+  query: '',
+  sort: 'saved',
+};
 
 export type ViewChange =
   | { type: 'source'; source: SourceFilter }
@@ -32,8 +41,9 @@ export type ViewChange =
   | { type: 'tag'; tagId: TagId; add: boolean }
   | { type: 'untag'; tagId: TagId }
   | { type: 'match'; match: TagMatch }
+  | { type: 'query'; query: string }
   | { type: 'sort'; sort: SortOrder }
-  /** Back to every post, keeping the order. */
+  /** Back to every post, with nothing searched for, keeping the order. */
   | { type: 'clear' };
 
 export function changeView(view: View, change: ViewChange): View {
@@ -46,10 +56,17 @@ export function changeView(view: View, change: ViewChange): View {
       return { ...view, tags: view.tags.filter((id) => id !== change.tagId) };
     case 'match':
       return { ...view, match: change.match };
+    case 'query':
+      return { ...view, query: change.query.slice(0, MAX_QUERY) };
     case 'sort':
       return { ...view, sort: change.sort };
     case 'clear':
-      return { ...view, source: DEFAULT_VIEW.source, tags: DEFAULT_VIEW.tags };
+      return {
+        ...view,
+        source: DEFAULT_VIEW.source,
+        tags: DEFAULT_VIEW.tags,
+        query: DEFAULT_VIEW.query,
+      };
   }
 }
 
@@ -64,5 +81,5 @@ function pickTag(tags: readonly TagId[], tagId: TagId, add: boolean): readonly T
 
 /** True when the view hides some posts. */
 export function isFiltered(view: View): boolean {
-  return view.source !== DEFAULT_VIEW.source || view.tags.length > 0;
+  return view.source !== DEFAULT_VIEW.source || view.tags.length > 0 || view.query.trim() !== '';
 }

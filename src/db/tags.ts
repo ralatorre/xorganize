@@ -113,14 +113,19 @@ export async function suggestTags(
   });
 }
 
+export interface TagIndex {
+  /** Every tag, by name, with how many posts carry it. */
+  tags: TagSuggestion[];
+  /** The posts carrying each tag. A tag on no post has no entry. */
+  posts: ReadonlyMap<TagId, ReadonlySet<PostId>>;
+}
+
 /**
- * Every tag with how many posts carry it, sorted by name. Counted in one pass
- * over the index, without reading any post.
+ * Every tag with the posts that carry it. Read in one pass over the index,
+ * without reading any post, and counted rather than stored, so counts cannot
+ * drift.
  */
-export async function tagCounts(
-  db: LibraryDatabase,
-  accountId: AccountId,
-): Promise<TagSuggestion[]> {
+export async function tagIndex(db: LibraryDatabase, accountId: AccountId): Promise<TagIndex> {
   return db.transaction('r', db.tags, db.postTags, async () => {
     const [tags, links] = await Promise.all([
       db.tags
@@ -132,25 +137,19 @@ export async function tagCounts(
         .between([accountId, Dexie.minKey], [accountId, Dexie.maxKey])
         .primaryKeys(),
     ]);
-    const uses = new Map<TagId, number>();
-    for (const [, , tagId] of links) uses.set(tagId, (uses.get(tagId) ?? 0) + 1);
-    return tags
-      .sort((a, b) => a.nameKey.localeCompare(b.nameKey))
-      .map((tag) => ({ ...summaryOf(tag), count: uses.get(tag.id) ?? 0 }));
+    const posts = new Map<TagId, Set<PostId>>();
+    for (const [, postId, tagId] of links) {
+      const carrying = posts.get(tagId) ?? new Set<PostId>();
+      carrying.add(postId);
+      posts.set(tagId, carrying);
+    }
+    return {
+      tags: tags
+        .sort((a, b) => a.nameKey.localeCompare(b.nameKey))
+        .map((tag) => ({ ...summaryOf(tag), count: posts.get(tag.id)?.size ?? 0 })),
+      posts,
+    };
   });
-}
-
-/** The IDs of the posts that carry a tag. */
-export async function postsWithTag(
-  db: LibraryDatabase,
-  accountId: AccountId,
-  tagId: TagId,
-): Promise<PostId[]> {
-  const keys = await db.postTags
-    .where('[accountId+tagId+taggedAt]')
-    .between([accountId, tagId, Dexie.minKey], [accountId, tagId, Dexie.maxKey])
-    .primaryKeys();
-  return keys.map(([, postId]) => postId);
 }
 
 /** The most recently used tags, newest first. */
