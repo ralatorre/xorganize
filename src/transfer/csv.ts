@@ -30,10 +30,21 @@ const LIST_SEPARATOR = ';';
 const FORMULA_START = /^[=+\-@\t\r]/;
 const NEEDS_QUOTES = /[",\r\n]/;
 
-/** One cell: neutralised if it could run as a formula, and quoted if it must be. */
-export function csvCell(value: string): string {
+/**
+ * Identifiers, always quoted. A spreadsheet reads a bare run of digits as a
+ * number: a post ID's 19 digits lose their last four, and a handle such as
+ * `007` its zeros. Quoted, they can be kept as text, with LibreOffice's
+ * "Format quoted field as text", or by choosing Text for the column on import.
+ */
+const ALWAYS_QUOTED: ReadonlySet<(typeof CSV_COLUMNS)[number]> = new Set([
+  'post_id',
+  'author_handle',
+]);
+
+/** One cell: neutralised if it could run as a formula, and quoted if it must be or `quoted` asks. */
+export function csvCell(value: string, quoted = false): string {
   const safe = FORMULA_START.test(value) ? `'${value}` : value;
-  return NEEDS_QUOTES.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
+  return quoted || NEEDS_QUOTES.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
 const isoOf = (time: number | null) => (time === null ? '' : new Date(time).toISOString());
@@ -52,7 +63,10 @@ export function csvRow(post: StoredPost, tagNames: readonly string[]): string {
     text: post.text,
     media_urls: post.media.map((item) => item.url).join(' '),
   };
-  return CSV_COLUMNS.map((column) => csvCell(cells[column])).join(',') + LINE_END;
+  return (
+    CSV_COLUMNS.map((column) => csvCell(cells[column], ALWAYS_QUOTED.has(column))).join(',') +
+    LINE_END
+  );
 }
 
 /** The file, in parts: the header, then a row for each exported post, its tags in the order they were applied. */

@@ -567,9 +567,9 @@ UTF-8 with a byte order mark (so spreadsheet applications detect the encoding), 
 
 | Column | Content |
 | --- | --- |
-| `post_id` | Post ID, as text. |
+| `post_id` | Post ID, as text, always quoted. |
 | `url` | Link to the post on X. |
-| `author_handle` | Without the `@`. |
+| `author_handle` | Without the `@`, always quoted. |
 | `author_name` | |
 | `posted_at` | ISO 8601, UTC. Empty if unknown. |
 | `saved_at` | ISO 8601, UTC. |
@@ -578,7 +578,7 @@ UTF-8 with a byte order mark (so spreadsheet applications detect the encoding), 
 | `text` | Full post text. |
 | `media_urls` | Separated by a space. |
 
-Rows end in CRLF. A cell is quoted only when it holds a comma, a double quote or a line break, and double quotes inside it are doubled. Tags are listed in the order they were applied. Cells that begin with `=`, `+`, `-`, `@`, tab or carriage return are prefixed with a single quote, so that post text cannot be interpreted as a spreadsheet formula. CSV is export-only (`csv.ts`).
+Rows end in CRLF. A cell is quoted when it holds a comma, a double quote or a line break, and double quotes inside it are doubled. `post_id` and `author_handle` are always quoted. Spreadsheets read a bare run of digits as a number and keep only 15 significant digits, so a 19-digit post ID would lose its last four, and a handle such as `007` its zeros. Quoted, they stay text in LibreOffice Calc with "Format quoted field as text" ticked on import; Excel ignores the quotes and needs the column set to Text. The `url` column holds the full ID either way. Tags are listed in the order they were applied. Cells that begin with `=`, `+`, `-`, `@`, tab or carriage return are prefixed with a single quote, so that post text cannot be interpreted as a spreadsheet formula. CSV is export-only (`csv.ts`).
 
 ### 12.3 Import
 

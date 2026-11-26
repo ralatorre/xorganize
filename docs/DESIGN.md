@@ -281,6 +281,7 @@ Export is a core feature, not only a safety net. There are two scopes and two fo
 
 - "Current view" means whatever the library is showing: a tag, a combination of tags, a source, a search. Exporting everything tagged `recipes` is three clicks.
 - A CSV row holds the post link, author, dates, sources (bookmark, like), the tags as one delimited column, and the text.
+- Post IDs are longer than a spreadsheet can hold as a number. Opened with default settings, LibreOffice and Excel round them, and a sheet saved that way keeps the wrong IDs. Choosing Text for the ID column on import keeps them exact (in LibreOffice, ticking "Format quoted field as text" does it). The post link always carries the exact ID.
 - Files are named with the date, and with the tag name when a single tag is exported. They never contain cookies, tokens or anything other than library data.
 - Import accepts JSON only. It shows a preview ("1,950 posts, 40 tags, 1,203 tag assignments") and a choice of **Merge** (default; unions tags and keeps the newer copy of each post) or **Replace**.
 - If the last backup is older than the reminder interval, the popup and the library show a quiet reminder.

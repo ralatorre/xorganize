@@ -171,6 +171,11 @@ describe('csvCell', () => {
     expect(csvCell('two\nlines')).toBe('"two\nlines"');
   });
 
+  it('quotes a cell when asked, even with nothing that needs it', () => {
+    expect(csvCell('2125755045182670001', true)).toBe('"2125755045182670001"');
+    expect(csvCell('say "hi"', true)).toBe('"say ""hi"""');
+  });
+
   it('leaves a plain cell alone', () => {
     expect(csvCell('plain text')).toBe('plain text');
     expect(csvCell('')).toBe('');
@@ -193,9 +198,9 @@ describe('csvRow', () => {
     );
     expect(row.endsWith('\r\n')).toBe(true);
     expect(cells(row)).toEqual([
-      '1',
+      '"1"', // identifiers are quoted, so that spreadsheets can keep them as text
       'https://x.com/example_user/status/1',
-      'example_user',
+      '"example_user"',
       'Example User',
       '2026-01-02T03:04:05.000Z',
       new Date(DAY + 1).toISOString(),
