@@ -4,6 +4,9 @@ import type { AccountId, PostId, TagSuggestion } from '@/src/db/types';
 import { EMPTY_CATALOGUE, browseView, type Catalogue } from '@/src/library/browse';
 import type { LibraryEdits } from '@/src/library/edits';
 import { summaryOf } from '@/src/library/format';
+import { IDLE, changeImport, isBusy, type ImportEvent } from '@/src/library/import-flow';
+import { previewLines } from '@/src/library/import-messages';
+import type { LibraryImport } from '@/src/library/importer';
 import { deletionImpact, deletionMessage } from '@/src/library/tag-actions';
 import { DEFAULT_VIEW, changeView } from '@/src/library/view';
 import { viewScope } from '@/src/library/view-export';
@@ -17,6 +20,8 @@ import { EmptyLibrary } from './components/EmptyLibrary';
 import { ExportControl } from './components/ExportControl';
 import { FilterBar } from './components/FilterBar';
 import { ImageSetting } from './components/ImageSetting';
+import { ImportControl } from './components/ImportControl';
+import { ImportDialog } from './components/ImportDialog';
 import { NoMatches } from './components/NoMatches';
 import type { PostActions } from './components/PostCard';
 import { PostList } from './components/PostList';
@@ -52,6 +57,8 @@ export interface LibraryProps {
     scope: ExportScope,
     format: ExportFormat,
   ): Promise<number | undefined>;
+  /** Reads a backup the user picked, and imports it. */
+  importer: LibraryImport;
   /** Turns images from X on or off. */
   setRemoteImages(enabled: boolean): void;
   /** Shown below the library: the diagnostics panel, in that build. */
@@ -74,8 +81,9 @@ type Dialog =
  */
 export function App(props: LibraryProps) {
   const { catalogue, authorOrder, posts, search, edits, copy, setRemoteImages, children } = props;
-  const { exportPosts } = props;
+  const { exportPosts, importer } = props;
   const [view, change] = useReducer(changeView, DEFAULT_VIEW);
+  const [flow, step] = useReducer(changeImport, IDLE);
   const [dialog, setDialog] = useState<Dialog>();
   const searchInput = useRef<HTMLInputElement>(null);
   const navigation = useRef<PostNavigation | undefined>(undefined);
@@ -119,12 +127,45 @@ export function App(props: LibraryProps) {
   );
 
   if (!library || !state) return <main class="library" />;
+
+  // Import: pick a file, preview it, then merge or replace.
+  const pickBackup = (file: File) => {
+    step({ type: 'read' });
+    void importer.read(file).then((result) => step({ type: 'parsed', result }));
+  };
+  const writeBackup = (mode: ImportEvent & { type: 'write' }) => {
+    if (flow.step !== 'preview' || changeImport(flow, mode).step !== 'importing') return;
+    const { backup } = flow;
+    step(mode);
+    void importer.write(backup, mode.mode).then((result) => step({ type: 'written', result }));
+  };
+  const importControl = (label: string) => (
+    <ImportControl
+      label={label}
+      busy={isBusy(flow)}
+      status={flow.step === 'idle' ? flow.status : ''}
+      onFile={pickBackup}
+    />
+  );
+  const importDialog =
+    flow.step === 'preview' || flow.step === 'importing' ? (
+      <ImportDialog
+        lines={previewLines(flow.summary, state.account)}
+        canReplace={!flow.summary.partial}
+        busy={flow.step === 'importing'}
+        onMerge={() => writeBackup({ type: 'write', mode: 'merge' })}
+        onReplace={() => writeBackup({ type: 'write', mode: 'replace' })}
+        onCancel={() => step({ type: 'cancel' })}
+      />
+    ) : null;
+
   if (state.account === undefined || state.counts.all === 0) {
     return (
       <main class="library library--empty">
         <h1 class="sidebar__title">xorganize</h1>
-        <EmptyLibrary />
+        <EmptyLibrary>{importControl('Restore from a backup')}</EmptyLibrary>
         {children}
+        {importDialog}
       </main>
     );
   }
@@ -162,6 +203,7 @@ export function App(props: LibraryProps) {
             formats={LIBRARY_FORMATS}
             onExport={(format) => exportPosts(accountId, 'library', format)}
           />
+          {importControl('Import backup')}
         </section>
       </Sidebar>
       <main class="library__main">
@@ -223,6 +265,7 @@ export function App(props: LibraryProps) {
       ) : dialog?.kind === 'shortcuts' ? (
         <ShortcutHelp onClose={closeDialog} />
       ) : null}
+      {importDialog}
     </div>
   );
 }

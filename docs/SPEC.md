@@ -173,7 +173,7 @@ Privacy and security take priority over convenience and features. The extension 
 | `storage` | Not requested | Settings are kept in IndexedDB (9.3), which needs no permission. |
 | `unlimitedStorage` | Not requested | Only to be added if M1 shows the library can be evicted under storage pressure and `navigator.storage.persist()` does not prevent it. |
 | `sidePanel` | Not requested | Only to be added if and when the side panel ships. The library tab does not need it. |
-| `tabs`, `cookies`, `webRequest`, `scripting`, `downloads`, `debugger`, `<all_urls>` | Never | Not needed. Opening the library tab and downloading an export both work without a permission. |
+| `tabs`, `cookies`, `webRequest`, `scripting`, `downloads`, `debugger`, `<all_urls>` | Never | Not needed. Opening the library tab, downloading an export and picking a file to import all work without a permission. |
 | `web_accessible_resources` | Never | Would let any web page test whether the extension is installed. |
 | `externally_connectable`, external message listeners | Never | No web page or other extension can message this one. |
 | Content scripts in subframes (`all_frames`) | Never | Only the top-level page is read. |
@@ -412,7 +412,7 @@ interface Post {
   partial: boolean;                  // built from the DOM fallback
   unavailable: boolean;              // tombstoned on X
   firstSeenAt: number;
-  lastSeenAt: number;                // set by every capture; search reads posts changed since
+  lastSeenAt: number;                // set by every capture and import; search reads posts changed since
   savedAt: number;                   // when it entered the library
 }
 
@@ -523,6 +523,7 @@ The worker checks `sender.id`, that the message comes from the top frame, and th
 - **Card actions** (built). `[+]` opens the tag popover, with the tag state and optimistic changes used on x.com, reading and writing the database directly (`src/library/tagging.ts`). The `⋯` menu copies the post's link with `navigator.clipboard.writeText`, which needs no permission when the user has just clicked, and removes the post after a confirmation.
 - **Keyboard** (built, `src/library/shortcuts.ts`). Single keys outside a field or a dialog: `/`, `j`, `k`, `t`, `o` and `?`. Cards take focus, and a card not yet rendered is scrolled to and focused once it is. The library runs the same keyboard guard as x.com (8), so what is typed in the popover never reaches its shortcuts.
 - **Export** (built). Beside Sort, "Export view" offers JSON and CSV for the posts listed; under Settings, "Export library" offers a JSON backup and CSV (12). Each says how many posts it exported.
+- **Import** (built). Under Settings, "Import backup" picks a JSON file; an empty library offers "Restore from a backup" instead. The file is checked, previewed, then merged or replaces the library (12.3).
 - **Sharing code.** The side panel imports the same app with a `compact` flag. The tag popover is shared with the injected UI (`src/ui/`).
 
 ## 12. Import and export
@@ -582,9 +583,24 @@ Rows end in CRLF. A cell is quoted when it holds a comma, a double quote or a li
 
 ### 12.3 Import
 
-- Import accepts JSON only. It validates the whole file against a schema before writing anything, then shows the preview described in the design.
-- **Merge** matches tags by `nameKey` (so the same tag created on two machines is unified) and posts by ID, using the upsert rules in 9.2.
-- **Replace** clears the account's data and writes the file, in one transaction. It is not offered for a file marked `"scope": "partial"`.
+Built. `readBackup(file)` and `parseBackup(text, size)` check a file (`validate.ts`); `importBackup(db, backup, mode)` writes it (`import.ts`). The library wires them through `createLibraryImport` (`src/library/importer.ts`), which tells open x.com tabs that tags changed, as edits do.
+
+- **JSON only** (DESIGN, decision 8). A CSV file is refused with a message saying so.
+- **The whole file is checked before anything is written.** A file may come from anyone, or be damaged, so it is treated as untrusted, like the API responses in 7.4.
+  - The header must name the format and a known version. A newer version is refused with a message to update the extension. Importers accept every earlier version; there is only version 1 so far.
+  - Each post passes the capture check (`isCapturedPost`): numeric IDs, a post link of the form `https://x.com/<handle>/status/<id>`, https-only media, avatar and link URLs, and the capture's size limits. Its flags are 0 or 1, it has a position (in the form `sortKey`, `recentKey` or `unknownKey` writes) exactly in the sources it is in, and its times are non-negative numbers.
+  - Each tag has a plain ID, a name that passes the rules in 9.1 (stored in its cleaned-up form), a palette colour and valid times.
+  - No post, tag, name (ignoring case) or tag assignment appears twice, and every tag assignment names a post and a tag in the file.
+  - Records are rebuilt from the fields above, at every level, so nothing else in the file is ever stored.
+  - Limits, overridable through options (`DEFAULT_IMPORT_LIMITS`): 512 MiB per file, which is refused unread when larger; 1,000,000 posts, 10,000 tags and 5,000,000 tag assignments.
+  - A problem names the record, for example "post 1,200 is not valid", and nothing is written.
+- **The file's account is written to**, since bookmarks and likes belong to one X account. Importing a file counts as storing, so its account becomes the one the library shows (`activeAccount`). The preview says so when that is not the account shown.
+- **Merge** writes in one transaction.
+  - Tags are matched by `nameKey`, so the same tag created on two machines is unified. A matched tag keeps the library's name and colour, the earlier `createdAt` and the later `lastUsedAt`. A new tag keeps the file's ID, unless the library already uses that ID for another tag, when it gets a new one.
+  - Posts are matched by ID (`mergeImported`), following the upsert rules in 9.2. Sources are combined, each keeping its position from the newer copy (the one with the later `lastSeenAt`) when that copy is in the source. Content and `unavailable` come from the newer copy, except that a partial copy never replaces a full one. `firstSeenAt` and `savedAt` keep the earlier value.
+  - Tag assignments are added. A post tagged with the same tag on both sides keeps the earlier `taggedAt`. `hasTags` is set on every post the file tags.
+  - Every post written gets `lastSeenAt` set to the time of the import, so that search reads it (11).
+- **Replace** deletes the account's posts, tags and tag assignments, then writes the file, in the same transaction. Other accounts and settings are untouched. It is not offered for a file marked `"scope": "partial"`, and `importBackup` refuses it.
 
 ### 12.4 Test fixtures
 
@@ -655,7 +671,7 @@ The repository is public, so the following never get committed:
 | M1 Capture | Interceptor, bridge, extraction, normalisation, database, account detection, capture banner without auto-scroll, for both the Bookmarks and Likes timelines. Verify every assumption in section 18. | Scrolling the Bookmarks page and the Likes tab fills the database, confirmed against a real free account. |
 | M2 Tagging | Tag button, popover, seen cache, DOM fallback, tag messages. **Built.** Confirmed against a real account on 2026-11-25, Alt+T with `j`/`k` focus after a fix (18.1, 14). | A post can be tagged from any timeline and the state survives a reload. |
 | M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. Avatars and thumbnails were brought forward and are done. **Browsing built**: sources, tag sidebar with groups, tag filters, sort, tag chips and quoted posts on cards, virtualised list. **Search built**: text, `#tag` and `@handle`, the `/` shortcut. **Tag management built**: rename, recolour, merge and delete, the card's `[+]` and `⋯` menu, the `j`/`k`/`t`/`o`/`?` shortcuts. The `x` shortcut comes with bulk actions in M6. | A tagged post can be found by tag and by text. |
-| M4 Export | JSON and CSV export for the whole library and the current view, import with merge and replace, backup reminder, delete all. **Export built**: JSON and CSV, for the whole library and the view. | Export then import into a clean profile reproduces the library, and a single tag can be exported to CSV. |
+| M4 Export | JSON and CSV export for the whole library and the current view, import with merge and replace, backup reminder, delete all. **Export built**: JSON and CSV, for the whole library and the view. **Import built**: JSON, checked in full, previewed, merged or replacing the library. | Export then import into a clean profile reproduces the library, and a single tag can be exported to CSV. |
 | M5 Live capture | Bookmark and like mutations, tag prompt toast, auto-scroll. | Bookmarking or liking a post anywhere adds it without visiting the Bookmarks or Likes page. |
 | M6 Release | Side panel, popup, settings, welcome page, bulk actions, accessibility pass, Firefox build, store listing. | Published to the Chrome Web Store and Firefox Add-ons. |
 
