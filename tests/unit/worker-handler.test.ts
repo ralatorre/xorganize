@@ -7,7 +7,12 @@ import type {
   CapturePostsMessage,
   TagsChangedMessage,
 } from '@/src/messaging/protocol';
-import { createWorkerHandler, isTrustedSender, type MessageSender } from '@/src/worker/handler';
+import {
+  createEditRelay,
+  createWorkerHandler,
+  isTrustedSender,
+  type MessageSender,
+} from '@/src/worker/handler';
 import { rawPost } from '../fixtures/posts';
 
 const EXTENSION = 'own-extension-id';
@@ -189,5 +194,18 @@ describe('isTrustedSender', () => {
     expect(isTrustedSender({ ...FROM_X, id: 'other' }, EXTENSION)).toBe(false);
     expect(isTrustedSender({ ...FROM_X, frameId: 2 }, EXTENSION)).toBe(false);
     expect(isTrustedSender({ ...FROM_X, url: 'https://evil.example/' }, EXTENSION)).toBe(false);
+  });
+});
+
+describe('createEditRelay', () => {
+  it('tells the content scripts to catch up after an edit in the library, and ignores the rest', () => {
+    const sent: unknown[] = [];
+    const relay = createEditRelay((message) => void sent.push(message));
+    relay({ type: 'tags/edited', accountId: ACCOUNT });
+    relay({ type: 'tags/edited', accountId: 'not an id' });
+    relay({ type: 'tags/changed', accountId: ACCOUNT });
+    relay('junk');
+    relay(undefined);
+    expect(sent).toEqual([{ type: 'tags/refresh', accountId: ACCOUNT }]);
   });
 });

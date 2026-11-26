@@ -7,6 +7,8 @@
  *   content script to the background worker.
  * - Port messages travel from the worker to content scripts over a
  *   `runtime.connect` port, to keep tag state on the page current.
+ * - Channel notices travel from extension pages to the worker over a
+ *   `BroadcastChannel`, which only the extension's own origin can use.
  *
  * Everything received is validated before use, whichever side it comes from.
  */
@@ -169,6 +171,36 @@ export interface TagsChangedMessage {
   accountId: string;
   postId: string;
   tags: TagSummary[];
+}
+
+/**
+ * Sent to every open tags port when tags changed in a way that touches many
+ * posts at once, such as a rename in the library: the page asks again for
+ * the tags of every post it shows.
+ */
+export interface TagsRefreshMessage {
+  type: 'tags/refresh';
+  accountId: string;
+}
+
+export type PortMessage = TagsChangedMessage | TagsRefreshMessage;
+
+/**
+ * The channel extension pages announce their tag edits on. A
+ * `BroadcastChannel` reaches only contexts of the same origin, so neither
+ * x.com nor the content scripts running there can hear or send on it. The
+ * worker passes each notice on to the content scripts as `tags/refresh`.
+ */
+export const TAGS_CHANNEL = 'xorganize-tags';
+
+/** An extension page changed the tags of an account. */
+export interface TagsEditedNotice {
+  type: 'tags/edited';
+  accountId: string;
+}
+
+export function isTagsEditedNotice(value: unknown): value is TagsEditedNotice {
+  return isRecord(value) && value.type === 'tags/edited' && isId(value.accountId);
 }
 
 export type RuntimeMessage = ContentReadyMessage | CaptureMessage | TagMessage | DiagnosticsMessage;

@@ -1,5 +1,5 @@
 import type { TagSummary } from '@/src/db/types';
-import { TagDot } from './TagDot';
+import { TagDot } from '@/src/ui/TagDot';
 
 /** A tag's name and colour. With `onRemove`, a button to take it away. */
 export function TagChip(props: { tag: TagSummary; removeLabel?: string; onRemove?(): void }) {

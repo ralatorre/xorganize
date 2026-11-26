@@ -6,7 +6,8 @@
 import type { CapturedPost } from '@/src/capture/normalise';
 import { themeOfColour, type Theme } from '@/src/dom/theme';
 import { createKeyboardGuard, contain } from '@/src/inline/keyboard-guard';
-import { matchesShortcut } from '@/src/inline/shortcut';
+import { POPOVER_SUGGESTIONS } from '@/src/inline/popover-model';
+import { isShortcutPress, matchesShortcut, postAnchor } from '@/src/inline/shortcut';
 import { createTagState } from '@/src/inline/tag-state';
 import { createTagger } from '@/src/inline/tagger';
 import { createTagsListener, type ListeningPort } from '@/src/inline/tags-port';
@@ -18,12 +19,9 @@ import {
   type TagsSetReply,
   type TagsSuggestReply,
 } from '@/src/messaging/protocol';
+import { createPopover } from '@/src/ui/popover';
 import { startMounter } from './mounter';
-import { createPopover } from './popover';
 import { createTagButton, type TagButton } from './tag-button';
-
-/** Suggestions shown in the popover. */
-const SUGGESTIONS = 8;
 
 export interface InlineTaggingDependencies {
   send<Reply>(message: RuntimeMessage): Promise<Reply | undefined>;
@@ -65,7 +63,7 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
     connect: deps.connect,
     accountId: deps.accountId,
     onChange: (postId, tags) => state.set(postId, tags),
-    onReconnect: () => state.refresh(),
+    onStale: () => state.refresh(),
   });
 
   const change = createTagger({
@@ -83,6 +81,7 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
   });
 
   const popover = createPopover({
+    view: window,
     state,
     change,
     guard,
@@ -93,7 +92,7 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
         type: 'tags/suggest' as const,
         accountId,
         query,
-        limit: Math.min(SUGGESTIONS, MAX_SUGGESTIONS),
+        limit: Math.min(POPOVER_SUGGESTIONS, MAX_SUGGESTIONS),
       }));
       const reply = message ? await deps.send<TagsSuggestReply>(message) : undefined;
       return reply?.ok ? { suggestions: reply.suggestions, recent: reply.recent } : undefined;
@@ -107,7 +106,12 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
     },
     create: (postId) => {
       const button = createTagButton(postId, (control) => popover.toggle(control));
-      guard.protect(button.host);
+      // Keys on the button stay from the page, but Alt+T still works there.
+      guard.protect(button.host, (event) => {
+        if (!isShortcutPress(event)) return;
+        event.preventDefault();
+        popover.toggle(button);
+      });
       contain(button.host);
       return button;
     },
@@ -130,20 +134,20 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
     },
   });
 
-  // Alt+T on a focused post opens its popover.
+  // Alt+T on a focused post opens its popover, and focus comes back to the post.
   window.addEventListener(
     'keydown',
     (event) => {
       if (!matchesShortcut(event)) return;
       const focused = document.activeElement;
       const article = focused instanceof Element ? focused.closest(SELECTORS.post) : null;
-      if (!article) return;
+      if (!(article instanceof HTMLElement)) return;
       for (const group of buttons.values()) {
         for (const button of group) {
           if (article.contains(button.host)) {
             event.preventDefault();
             event.stopImmediatePropagation();
-            popover.toggle(button);
+            popover.toggle(postAnchor(button, article));
             return;
           }
         }

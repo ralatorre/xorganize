@@ -20,6 +20,22 @@ export const TAG_PALETTE = [
   '#8b98a5',
 ] as const;
 
+/** What each colour is called, for people who cannot see it. In palette order. */
+export const TAG_COLOUR_NAMES = [
+  'Blue',
+  'Green',
+  'Pink',
+  'Orange',
+  'Purple',
+  'Yellow',
+  'Teal',
+  'Red',
+  'Brown',
+  'Indigo',
+  'Lime',
+  'Grey',
+] as const satisfies { length: (typeof TAG_PALETTE)['length'] };
+
 /** Size of the tag palette. Colours are stored as an index into it. */
 export const TAG_COLOURS = TAG_PALETTE.length;
 

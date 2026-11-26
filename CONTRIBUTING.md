@@ -54,7 +54,7 @@ Each module, function and component has one reason to change.
 | Effects | Database, messaging, DOM | `src/db/repo.ts`, `src/messaging/bridge.ts` |
 | Routing | Which message means what, with injected effects | `src/worker/handler.ts`, `src/capture/content.ts` |
 | Wiring | Real implementations in, nothing decided | `entrypoints/**` |
-| UI | Renders what it is given; calls the actions it is given | `entrypoints/library/components/` |
+| UI | Renders what it is given; calls the actions it is given | `entrypoints/library/components/`, `src/ui/` (shared by x.com and the library) |
 
 - An entrypoint's listener hands off to a handler from `src/`; it holds no branching logic of its own.
 - Components render. Data loading lives in hooks or loaders that receive their data source, and changes go through functions passed in as props. One component per file.

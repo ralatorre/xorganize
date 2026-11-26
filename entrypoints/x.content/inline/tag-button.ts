@@ -5,7 +5,7 @@
 
 import type { TagSummary } from '@/src/db/types';
 import type { Theme } from '@/src/dom/theme';
-import { createShadowHost } from './shadow';
+import { createShadowHost } from '@/src/ui/shadow';
 import { BUTTON_STYLES } from './styles';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -27,7 +27,7 @@ export function createTagButton(
   postId: string,
   onActivate: (button: TagButton) => void,
 ): TagButton {
-  const { host, container } = createShadowHost(BUTTON_STYLES);
+  const { host, container } = createShadowHost(document, BUTTON_STYLES);
 
   const button = document.createElement('button');
   button.type = 'button';

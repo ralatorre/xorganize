@@ -5,7 +5,7 @@ import { themeOfColour } from '@/src/dom/theme';
 import { GUARDED_EVENTS, contain, createKeyboardGuard } from '@/src/inline/keyboard-guard';
 import { keyAction, moveHighlight, recentOf, rowsOf } from '@/src/inline/popover-model';
 import { placePopover } from '@/src/inline/position';
-import { TAG_SHORTCUT, matchesShortcut } from '@/src/inline/shortcut';
+import { TAG_SHORTCUT, isShortcutPress, matchesShortcut, postAnchor } from '@/src/inline/shortcut';
 import { createTagState } from '@/src/inline/tag-state';
 import { PENDING_COLOUR, createTagger, preview } from '@/src/inline/tagger';
 import { createTagsListener, type ListeningPort } from '@/src/inline/tags-port';
@@ -321,7 +321,7 @@ describe('createTagsListener', () => {
       },
       accountId: () => ACCOUNT,
       onChange: (postId, tags) => void changes.push([postId, tags]),
-      onReconnect: () => void reconnects++,
+      onStale: () => void reconnects++,
     });
     return { listener, ports, changes, reconnects: () => reconnects };
   }
@@ -361,6 +361,15 @@ describe('createTagsListener', () => {
     expect(reconnects()).toBe(1);
   });
 
+  it('asks again for everything when this account’s tags were edited in the library', () => {
+    const { listener, ports, reconnects } = setup();
+    listener.ensure();
+    ports[0]!.receive({ type: 'tags/refresh', accountId: ACCOUNT });
+    ports[0]!.receive({ type: 'tags/refresh', accountId: '9000000000000000002' });
+    ports[0]!.receive({ type: 'tags/refresh', accountId: '<x>' });
+    expect(reconnects()).toBe(1);
+  });
+
   it('gives up quietly when the extension has gone', () => {
     const listener = createTagsListener({
       connect: () => {
@@ -368,7 +377,7 @@ describe('createTagsListener', () => {
       },
       accountId: () => ACCOUNT,
       onChange: () => {},
-      onReconnect: () => {},
+      onStale: () => {},
     });
     expect(() => listener.ensure()).not.toThrow();
   });
@@ -441,5 +450,45 @@ describe('matchesShortcut', () => {
 
   it('can be given another shortcut', () => {
     expect(matchesShortcut(press({ code: 'KeyG' }), press({ code: 'KeyG' }))).toBe(true);
+  });
+});
+
+describe('isShortcutPress', () => {
+  const event = (type: string, changes: Partial<typeof TAG_SHORTCUT> = {}) =>
+    ({ type, ...TAG_SHORTCUT, ...changes }) as unknown as Event;
+
+  it('is the shortcut going down', () => {
+    expect(isShortcutPress(event('keydown'))).toBe(true);
+  });
+
+  it('is not the shortcut coming up, nor another event the guard hands on', () => {
+    expect(isShortcutPress(event('keyup'))).toBe(false);
+    expect(isShortcutPress(event('input'))).toBe(false);
+  });
+
+  it('is not another key going down', () => {
+    expect(isShortcutPress(event('keydown', { code: 'KeyJ' }))).toBe(false);
+  });
+});
+
+describe('postAnchor', () => {
+  it('is placed at the tag button, and gives focus back to the post', () => {
+    const shown: boolean[] = [];
+    const host = { id: 'host' } as unknown as HTMLElement;
+    const post = { id: 'post' } as unknown as HTMLElement;
+    const button = {
+      postId: '101',
+      host,
+      button: { id: 'button' } as unknown as HTMLElement,
+      setExpanded: (expanded: boolean) => void shown.push(expanded),
+    };
+
+    const anchor = postAnchor(button, post);
+    anchor.setExpanded(true);
+
+    expect(anchor.postId).toBe('101');
+    expect(anchor.host).toBe(host);
+    expect(anchor.button).toBe(post);
+    expect(shown).toEqual([true]);
   });
 });
