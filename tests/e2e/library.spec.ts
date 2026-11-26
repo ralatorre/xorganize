@@ -177,11 +177,13 @@ test('captures bookmarks and likes as they load, and keeps up with changes', asy
       hidden: false,
     });
   await expect.poll(() => counts(library)).toEqual(totals(3, 3, 1));
-  expect(await texts(library, 'Bookmarks')).toEqual([
-    'Bookmark three, also liked',
-    'Bookmark two',
-    'Bookmark one <b>not markup</b>', // shown as text, never as markup
-  ]);
+  await expect
+    .poll(() => texts(library, 'Bookmarks'))
+    .toEqual([
+      'Bookmark three, also liked',
+      'Bookmark two',
+      'Bookmark one <b>not markup</b>', // shown as text, never as markup
+    ]);
 
   // The account's own likes load. Someone else's are not stored.
   await timeline(site, 'Likes', { userId: VIEWER });
@@ -232,6 +234,59 @@ test('captures bookmarks and likes as they load, and keeps up with changes', asy
   await expect.poll(() => banner(site)).toMatchObject({ hidden: false });
   await site.evaluate(() => history.pushState({}, '', '/home'));
   await expect.poll(() => banner(site)).toMatchObject({ hidden: true });
+});
+
+test('finds posts by their text and author, and keeps up with new ones', async ({
+  context,
+  extensionId,
+}) => {
+  await serveStandIn(context);
+  const site = await context.newPage();
+  await site.goto('https://x.com/i/bookmarks');
+  await timeline(site, 'Bookmarks');
+  await timeline(site, 'Likes', { userId: VIEWER });
+  const library = await context.newPage();
+  await library.goto(`chrome-extension://${extensionId}/library.html`);
+  await expect.poll(() => counts(library)).toEqual(totals(5, 3, 3));
+  const status = library.getByRole('status');
+  const listed = () => library.locator('.posts .post__text').allTextContents();
+
+  // `/` goes to the search box, unless it is typed into a field.
+  await library.locator('body').press('/');
+  const search = library.getByRole('searchbox', { name: 'Search posts' });
+  await expect(search).toBeFocused();
+
+  // Any part of a word, ignoring case, every word in any order.
+  await library.keyboard.type('BOOKMARK');
+  await expect(status).toHaveText('3 posts');
+  await expect(search).toHaveValue('BOOKMARK');
+  await search.fill('two kmar');
+  await expect.poll(listed).toEqual(['Bookmark two']);
+  await expect(status).toHaveText('1 post');
+
+  // By author, alone or with text, within a source.
+  await search.fill('@another');
+  await expect.poll(listed).toEqual(['Like two']);
+  await expect(status).toHaveText('1 post');
+  await search.fill('one');
+  await source(library, 'Likes').click();
+  await expect.poll(listed).toEqual(['Like one']);
+  await expect(status).toHaveText('1 post');
+
+  // A post stored while searching is found at once.
+  await source(library, 'All').click();
+  await search.fill('home');
+  await expect(library.getByRole('heading', { name: 'No posts match' })).toBeVisible();
+  await timeline(site, 'HomeTimeline');
+  await change(site, 'CreateBookmark', '401');
+  await expect.poll(listed).toEqual(['Seen at home']);
+  await expect(status).toHaveText('1 post');
+
+  // Clearing the filters clears the search too.
+  await search.fill('nothing like this');
+  await library.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(search).toHaveValue('');
+  await expect(status).toHaveText('6 posts');
 });
 
 test('keeps what it captured after the browser forgets the page', async ({

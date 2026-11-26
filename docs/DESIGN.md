@@ -169,7 +169,7 @@ Sidebar:
 
 Main column:
 
-- **Search** matches post text, author name and handle. `#name` filters by tag and `@handle` by author, so the whole query can be typed. Results update as the user types.
+- **Search** matches post text, author name and handle, by any part of a word, ignoring case and accents. Every word must match, in any order, and `"quoted words"` must appear together. `#name` filters by tag and `@handle` by author, so the whole query can be typed; `#"to read"` names a tag with a space. The last word, while it is still being typed, also matches names that start with it, so `#ru` already shows `rust`. Several `#` tags must all match, several `@` authors any one. Search combines with the source and tag filters, and keeps the chosen sort. Results update as the user types, and as posts arrive from x.com. Clear filters empties the search too.
 - **Match All / Any** switches between requiring every selected tag and any of them. It appears once two tags are selected.
 - **Sort**: saved order (newest first, the default; for Bookmarks and Likes, X's own order), post date (newest first), author (A to Z).
 - **No posts match** offers Clear filters, which returns to All with no tags and keeps the sort.

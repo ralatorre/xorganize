@@ -318,10 +318,10 @@ test('a post tagged on X can be found in the library by its tags', async ({
 
   // One tag, then a second added with Ctrl: all of them, then any of them.
   await sidebarTag(library, 'Rust').click();
-  expect(await listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
+  await expect.poll(() => listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
   await sidebarTag(library, 'to read').click({ modifiers: ['Control'] });
   await expect(library.getByRole('status')).toHaveText('1 post');
-  expect(await listed(library)).toEqual(['Seen in a timeline']);
+  await expect.poll(() => listed(library)).toEqual(['Seen in a timeline']);
   await library.getByRole('radio', { name: 'Any' }).check();
   await expect(library.getByRole('status')).toHaveText('2 posts');
   await library.getByRole('button', { name: 'Remove filter Rust' }).click();
@@ -340,5 +340,14 @@ test('a post tagged on X can be found in the library by its tags', async ({
 
   // Ordered by post date: the newer ID first.
   await library.getByRole('combobox', { name: 'Sort:' }).selectOption('posted');
-  expect(await listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
+  await expect.poll(() => listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
+
+  // Found by typing its tag, and by its text.
+  const search = library.getByRole('searchbox', { name: 'Search posts' });
+  await search.fill('#"to read" #rus');
+  await expect(library.getByRole('status')).toHaveText('2 posts');
+  await search.fill('#"dev/web"');
+  await expect.poll(() => listed(library)).toEqual(['Only on the page']);
+  await search.fill('timeline #rust');
+  await expect.poll(() => listed(library)).toEqual(['Seen in a timeline']);
 });

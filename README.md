@@ -2,7 +2,7 @@
 
 A browser extension that lets you tag, search, organise and export your X bookmarks and likes. Everything is stored locally in your browser. The extension makes no network requests of its own.
 
-> Status: early development. Bookmarks and likes are captured as you browse them on X. Any post can be tagged from x.com, and the library lists posts by source and tag. Search and export are not built yet.
+> Status: early development. Bookmarks and likes are captured as you browse them on X. Any post can be tagged from x.com, and the library lists and searches posts by source, tag, text and author. Export is not built yet.
 
 ## What it will do
 

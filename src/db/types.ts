@@ -33,6 +33,7 @@ export interface StoredPost {
   /** No longer available on X. The stored copy is all there is. */
   unavailable: boolean;
   firstSeenAt: number;
+  /** When it was last stored from X. Every capture sets it, so search reads only what changed. */
   lastSeenAt: number;
   /** When it entered the library. */
   savedAt: number;
