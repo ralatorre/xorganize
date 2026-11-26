@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { normalisePost } from '@/src/capture/normalise';
-import { clearSource, saveCapture } from '@/src/db/repo';
+import { activeAccount, clearSource, saveCapture } from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
 import {
   UnknownPostError,
@@ -42,6 +42,17 @@ const change = (partial: Partial<TagChange> & { postId: string }) =>
 const stored = (id: string, accountId = ACCOUNT) => db.posts.get([accountId, id]);
 
 describe('setPostTags', () => {
+  it('makes the account active, so a library of tagged posts only is shown', async () => {
+    expect(await activeAccount(db)).toBeUndefined();
+    await change({ postId: '1', add: ['Rust'], post: post('1') });
+    expect(await activeAccount(db)).toBe(ACCOUNT);
+  });
+
+  it('leaves the active account alone when nothing is stored', async () => {
+    await change({ postId: '1', add: [], remove: ['nothing'] });
+    expect(await activeAccount(db)).toBeUndefined();
+  });
+
   it('stores a post seen anywhere when it is tagged, without bookmarking or liking it', async () => {
     const tags = await change({ postId: '1', add: ['Rust', 'to read'], post: post('1') });
 

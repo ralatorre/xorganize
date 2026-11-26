@@ -124,8 +124,38 @@ async function banner(page: Page): Promise<{ text: string; hidden: boolean } | u
   };
 }
 
-const texts = (page: Page, list: string) =>
-  page.getByRole('region', { name: list }).locator('.post__text').allTextContents();
+/** A source in the library's sidebar, by its label. */
+const source = (page: Page, label: string) =>
+  page.getByRole('button', { name: new RegExp(`^${label} [\\d,]+$`) });
+
+/** The posts a source shows, in order. */
+async function texts(page: Page, label: string): Promise<string[]> {
+  await source(page, label).click();
+  await expect(source(page, label)).toHaveAttribute('aria-pressed', 'true');
+  return page.locator('.posts .post__text').allTextContents();
+}
+
+/** How many posts each source holds, as the sidebar shows. */
+async function counts(page: Page): Promise<Record<string, string>> {
+  const items = await page
+    .getByRole('region', { name: 'Sources' })
+    .getByRole('button')
+    .evaluateAll((buttons) =>
+      buttons.map((button) => [
+        button.querySelector('.sidebar__label')?.textContent ?? '',
+        button.querySelector('.sidebar__count')?.textContent ?? '',
+      ]),
+    );
+  return Object.fromEntries(items);
+}
+
+const totals = (all: number, bookmarks: number, likes: number, tagged = 0) => ({
+  All: String(all),
+  Bookmarks: String(bookmarks),
+  Likes: String(likes),
+  'Tagged only': String(tagged),
+  Untagged: String(all - tagged),
+});
 
 test('captures bookmarks and likes as they load, and keeps up with changes', async ({
   context,
@@ -146,7 +176,7 @@ test('captures bookmarks and likes as they load, and keeps up with changes', asy
       text: 'xorganize · 3 bookmarks captured',
       hidden: false,
     });
-  await expect(library.getByText('3 bookmarks · 1 like')).toBeVisible();
+  await expect.poll(() => counts(library)).toEqual(totals(3, 3, 1));
   expect(await texts(library, 'Bookmarks')).toEqual([
     'Bookmark three, also liked',
     'Bookmark two',
@@ -155,7 +185,7 @@ test('captures bookmarks and likes as they load, and keeps up with changes', asy
 
   // The account's own likes load. Someone else's are not stored.
   await timeline(site, 'Likes', { userId: VIEWER });
-  await expect(library.getByText('3 bookmarks · 3 likes')).toBeVisible();
+  await expect.poll(() => counts(library)).toEqual(totals(5, 3, 3));
   await timeline(site, 'Likes', { userId: SOMEONE_ELSE });
 
   // The user bookmarks and likes a post seen elsewhere, and removes two others.
@@ -165,8 +195,8 @@ test('captures bookmarks and likes as they load, and keeps up with changes', asy
   await change(site, 'DeleteBookmark', '102');
   await change(site, 'UnfavoriteTweet', '301');
 
-  // A post counted under both is counted once in each, and the header says so.
-  await expect(library.getByText('3 bookmarks · 3 likes · 2 in both')).toBeVisible();
+  // A post in both sources is counted once in each, and once in All.
+  await expect.poll(() => counts(library)).toEqual(totals(4, 3, 3));
   await expect
     .poll(() => texts(library, 'Bookmarks'))
     .toEqual(['Seen at home', 'Bookmark three, also liked', 'Bookmark one <b>not markup</b>']);
@@ -178,7 +208,7 @@ test('captures bookmarks and likes as they load, and keeps up with changes', asy
 
   // The user likes a post that never arrived from the API: it is read from the page.
   await change(site, 'FavoriteTweet', '501');
-  await expect(library.getByText('3 bookmarks · 4 likes · 2 in both')).toBeVisible();
+  await expect.poll(() => counts(library)).toEqual(totals(5, 3, 4));
   await expect
     .poll(() => texts(library, 'Likes'))
     .toEqual(['Shown on the page only', 'Seen at home', 'Like two', 'Bookmark three, also liked']);
@@ -218,7 +248,7 @@ test('keeps what it captured after the browser forgets the page', async ({
   const library = await context.newPage();
   await library.goto(`chrome-extension://${extensionId}/library.html`);
 
-  await expect(library.getByText('3 bookmarks · 1 like')).toBeVisible();
+  await expect.poll(() => counts(library)).toEqual(totals(3, 3, 1));
 });
 
 test('captures nothing when no account is signed in', async ({ context, extensionId }) => {
@@ -316,7 +346,7 @@ test('shows images from X without cookies or a referrer, and none once turned of
   await timeline(site, 'Bookmarks');
   const library = await context.newPage();
   await library.goto(`chrome-extension://${extensionId}/library.html`);
-  await expect(library.getByText('3 bookmarks')).toBeVisible();
+  await expect(library.locator('.post')).toHaveCount(3);
 
   const card = (text: string) => library.locator('.post', { hasText: text });
   const loaded = (text: string) =>
@@ -370,7 +400,7 @@ test('shows images from X without cookies or a referrer, and none once turned of
   await expect(library.locator('img')).toHaveCount(0);
   const before = requests.length;
   await library.reload();
-  await expect(library.getByText('3 bookmarks')).toBeVisible();
+  await expect(library.locator('.post')).toHaveCount(3);
   await expect(library.getByRole('checkbox', { name: /Show images from X/ })).not.toBeChecked();
   await expect(library.locator('img')).toHaveCount(0);
   await expect(card('Photo and video').getByText('2 attachments')).toBeVisible();

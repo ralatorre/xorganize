@@ -8,7 +8,7 @@ import Dexie from 'dexie';
 import type { CapturedPost } from '@/src/capture/normalise';
 import { parseTagName, tagKey } from '@/src/tags/names';
 import { nextColour } from '@/src/tags/palette';
-import { mergePost } from './repo';
+import { mergePost, rememberAccount } from './repo';
 import type { LibraryDatabase } from './schema';
 import type { AccountId, PostId, Tag, TagId, TagSuggestion, TagSummary } from './types';
 
@@ -113,6 +113,46 @@ export async function suggestTags(
   });
 }
 
+/**
+ * Every tag with how many posts carry it, sorted by name. Counted in one pass
+ * over the index, without reading any post.
+ */
+export async function tagCounts(
+  db: LibraryDatabase,
+  accountId: AccountId,
+): Promise<TagSuggestion[]> {
+  return db.transaction('r', db.tags, db.postTags, async () => {
+    const [tags, links] = await Promise.all([
+      db.tags
+        .where('[accountId+id]')
+        .between([accountId, Dexie.minKey], [accountId, Dexie.maxKey])
+        .toArray(),
+      db.postTags
+        .where('[accountId+tagId+taggedAt]')
+        .between([accountId, Dexie.minKey], [accountId, Dexie.maxKey])
+        .primaryKeys(),
+    ]);
+    const uses = new Map<TagId, number>();
+    for (const [, , tagId] of links) uses.set(tagId, (uses.get(tagId) ?? 0) + 1);
+    return tags
+      .sort((a, b) => a.nameKey.localeCompare(b.nameKey))
+      .map((tag) => ({ ...summaryOf(tag), count: uses.get(tag.id) ?? 0 }));
+  });
+}
+
+/** The IDs of the posts that carry a tag. */
+export async function postsWithTag(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  tagId: TagId,
+): Promise<PostId[]> {
+  const keys = await db.postTags
+    .where('[accountId+tagId+taggedAt]')
+    .between([accountId, tagId, Dexie.minKey], [accountId, tagId, Dexie.maxKey])
+    .primaryKeys();
+  return keys.map(([, postId]) => postId);
+}
+
 /** The most recently used tags, newest first. */
 export async function recentTags(
   db: LibraryDatabase,
@@ -145,7 +185,7 @@ export async function setPostTags(
   const newId = options.newId ?? (() => crypto.randomUUID());
   const { accountId, postId } = change;
 
-  return db.transaction('rw', db.posts, db.tags, db.postTags, async () => {
+  return db.transaction('rw', db.posts, db.tags, db.postTags, db.meta, async () => {
     const existing = await db.posts.get([accountId, postId]);
     const post = change.post
       ? mergePost(existing, change.post, { accountId, now, partial: change.partial === true })
@@ -170,8 +210,12 @@ export async function setPostTags(
 
     const tags = await tagsOfPost(db, accountId, postId);
     post.hasTags = tags.length > 0 ? 1 : 0;
-    if (post.isBookmark || post.isLike || post.hasTags) await db.posts.put(post);
-    else await db.posts.delete([accountId, postId]);
+    if (post.isBookmark || post.isLike || post.hasTags) {
+      await db.posts.put(post);
+      await rememberAccount(db, accountId);
+    } else {
+      await db.posts.delete([accountId, postId]);
+    }
     return tags;
   });
 }

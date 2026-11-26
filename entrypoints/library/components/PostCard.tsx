@@ -1,12 +1,16 @@
-import type { StoredPost } from '@/src/db/types';
 import { xImageUrl } from '@/src/hosts';
 import { formatDate, plural } from '@/src/library/format';
+import type { PostView } from '@/src/library/posts';
 import { thumbnailsOf } from '@/src/library/thumbnails';
 import { Avatar } from './Avatar';
+import { PostText } from './PostText';
+import { QuotedPost } from './QuotedPost';
+import { TagChip } from './TagChip';
 import { Thumbnails } from './Thumbnails';
 
 /** One post. With `images` off, nothing is requested from X. */
-export function PostCard({ post, images }: { post: StoredPost; images: boolean }) {
+export function PostCard({ view, images }: { view: PostView; images: boolean }) {
+  const { post, tags, quoted } = view;
   const thumbnails = images ? thumbnailsOf(post.media) : [];
   return (
     <article class="post">
@@ -19,9 +23,19 @@ export function PostCard({ post, images }: { post: StoredPost; images: boolean }
             {post.createdAt === null ? '' : ` · ${formatDate(post.createdAt)}`}
           </span>
         </header>
-        <p class="post__text">{post.text}</p>
+        <PostText text={post.text} />
         {thumbnails.length > 0 ? (
           <Thumbnails items={thumbnails} sensitive={post.sensitive} />
+        ) : null}
+        {quoted ? <QuotedPost post={quoted} /> : null}
+        {tags.length > 0 ? (
+          <ul class="post__tags" aria-label="Tags">
+            {tags.map((tag) => (
+              <li key={tag.id}>
+                <TagChip tag={tag} />
+              </li>
+            ))}
+          </ul>
         ) : null}
         <footer class="post__meta">
           {post.media.length > thumbnails.length ? (

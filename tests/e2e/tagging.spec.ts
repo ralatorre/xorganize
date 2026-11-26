@@ -265,3 +265,80 @@ test('shows no buttons when no account is signed in', async ({ context }) => {
   await site.waitForTimeout(500);
   expect(await tagButtons(site)).toEqual([]);
 });
+
+/** The posts the library lists, in order. */
+const listed = (library: Page) => library.locator('.posts .post__text').allTextContents();
+
+/** A tag in the library's sidebar, by its label. */
+const sidebarTag = (library: Page, label: string) =>
+  library
+    .getByRole('region', { name: 'Tags' })
+    .getByRole('button', { name: new RegExp(`^${label} [\\d,]+$`) });
+
+/** Tags a post from its button on the page, one name at a time. */
+async function tagFromPage(site: Page, postId: string, names: string[]) {
+  await tagHost(site, postId).click();
+  await expect.poll(() => popoverOpen(site)).toBe(true);
+  for (const name of names) {
+    await site.keyboard.type(name);
+    // Wait for the suggestions, so Enter takes exactly the typed name.
+    await site.waitForTimeout(200);
+    await site.keyboard.press('Enter');
+  }
+  await site.keyboard.press('Escape');
+  await expect.poll(() => popoverOpen(site)).toBe(false);
+}
+
+test('a post tagged on X can be found in the library by its tags', async ({
+  context,
+  extensionId,
+}) => {
+  await serveStandIn(context);
+  const site = await openSite(context);
+  await tagFromPage(site, '101', ['Rust', 'to read']);
+  await tagFromPage(site, '102', ['Rust', 'dev/web']);
+
+  const library = await context.newPage();
+  await library.goto(`chrome-extension://${extensionId}/library.html`);
+
+  // Every tag with its count; a `/` puts a tag in a group.
+  await expect(sidebarTag(library, 'Rust')).toContainText('2');
+  await expect(sidebarTag(library, 'to read')).toContainText('1');
+  await expect(sidebarTag(library, 'web')).toBeVisible();
+  await library.getByRole('button', { name: 'dev group' }).click();
+  await expect(sidebarTag(library, 'web')).toHaveCount(0);
+
+  // Tagged without being bookmarked or liked.
+  await expect(library.getByRole('button', { name: /^Tagged only 2$/ })).toBeVisible();
+  await expect(library.getByRole('button', { name: /^Bookmarks 0$/ })).toBeVisible();
+
+  // Each card carries its tags, in the order they were applied.
+  const card = library.locator('.post', { hasText: 'Seen in a timeline' });
+  await expect(card.getByRole('list', { name: 'Tags' })).toHaveText(['Rust', 'to read'].join(''));
+
+  // One tag, then a second added with Ctrl: all of them, then any of them.
+  await sidebarTag(library, 'Rust').click();
+  expect(await listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
+  await sidebarTag(library, 'to read').click({ modifiers: ['Control'] });
+  await expect(library.getByRole('status')).toHaveText('1 post');
+  expect(await listed(library)).toEqual(['Seen in a timeline']);
+  await library.getByRole('radio', { name: 'Any' }).check();
+  await expect(library.getByRole('status')).toHaveText('2 posts');
+  await library.getByRole('button', { name: 'Remove filter Rust' }).click();
+  await expect(library.getByRole('status')).toHaveText('1 post');
+
+  // A tag added on X shows at once.
+  await tagFromPage(site, '102', ['to read']);
+  await expect(library.getByRole('status')).toHaveText('2 posts');
+  await expect(sidebarTag(library, 'to read')).toContainText('2');
+
+  // A filter that matches nothing offers a way back.
+  await library.getByRole('button', { name: /^Bookmarks 0$/ }).click();
+  await expect(library.getByRole('heading', { name: 'No posts match' })).toBeVisible();
+  await library.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(library.getByRole('status')).toHaveText('2 posts');
+
+  // Ordered by post date: the newer ID first.
+  await library.getByRole('combobox', { name: 'Sort:' }).selectOption('posted');
+  expect(await listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
+});

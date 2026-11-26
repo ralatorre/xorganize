@@ -159,7 +159,7 @@ export async function saveCapture(
       await db.posts.update([accountId, id], { unavailable: true, lastSeenAt: now });
     }
 
-    await db.meta.put({ accountId: '', key: ACTIVE_ACCOUNT, value: accountId });
+    await rememberAccount(db, accountId);
     return counts(db, accountId);
   });
 }
@@ -191,11 +191,23 @@ export async function clearSource(
   });
 }
 
+const allOf = (accountId: AccountId) =>
+  [
+    [accountId, Dexie.minKey],
+    [accountId, Dexie.maxKey],
+  ] as const;
+const flaggedOf = (accountId: AccountId) =>
+  [
+    [accountId, 1, Dexie.minKey],
+    [accountId, 1, Dexie.maxKey],
+  ] as const;
+const idsOf = (keys: Array<[AccountId, PostId]>): PostId[] => keys.map(([, id]) => id);
+
 export async function counts(db: LibraryDatabase, accountId: AccountId): Promise<Counts> {
   const count = (index: string) =>
     db.posts
       .where(index)
-      .between([accountId, 1, Dexie.minKey], [accountId, 1, Dexie.maxKey])
+      .between(...flaggedOf(accountId))
       .count();
   const [bookmarks, likes] = await Promise.all([
     count('[accountId+isBookmark+bookmarkSort]'),
@@ -204,36 +216,71 @@ export async function counts(db: LibraryDatabase, accountId: AccountId): Promise
   return { bookmarks, likes };
 }
 
-/** A source's posts in timeline order, newest first. */
-export function postsBySource(
+/** The IDs of a source's posts in timeline order, newest first. */
+export async function sourceIds(
   db: LibraryDatabase,
   accountId: AccountId,
   source: SourceKind,
-  limit: number,
-): Promise<StoredPost[]> {
+): Promise<PostId[]> {
   const index =
     source === 'bookmark' ? '[accountId+isBookmark+bookmarkSort]' : '[accountId+isLike+likeSort]';
-  return db.posts
-    .where(index)
-    .between([accountId, 1, Dexie.minKey], [accountId, 1, Dexie.maxKey])
-    .reverse()
-    .limit(limit)
-    .toArray();
+  return idsOf(
+    await db.posts
+      .where(index)
+      .between(...flaggedOf(accountId))
+      .reverse()
+      .primaryKeys(),
+  );
 }
 
-/** The account that most recently captured something, if any has. */
+/** The IDs of posts with at least one tag. */
+export async function taggedIds(db: LibraryDatabase, accountId: AccountId): Promise<PostId[]> {
+  return idsOf(
+    await db.posts
+      .where('[accountId+hasTags+savedAt]')
+      .between(...flaggedOf(accountId))
+      .primaryKeys(),
+  );
+}
+
+/** The IDs of every stored post, newest in the library first. */
+export async function savedIds(db: LibraryDatabase, accountId: AccountId): Promise<PostId[]> {
+  return idsOf(
+    await db.posts
+      .where('[accountId+savedAt]')
+      .between(...allOf(accountId))
+      .reverse()
+      .primaryKeys(),
+  );
+}
+
+/** Every stored post's ID with its author's handle, read from the index alone. */
+export async function authorsOf(
+  db: LibraryDatabase,
+  accountId: AccountId,
+): Promise<Array<{ id: PostId; handle: string }>> {
+  const range = () => db.posts.where('[accountId+author.handle]').between(...allOf(accountId));
+  return db.transaction('r', db.posts, async () => {
+    const [keys, ids] = await Promise.all([range().keys(), range().primaryKeys()]);
+    return ids.map(([, id], index) => ({
+      id,
+      handle: String((keys[index] as [AccountId, string] | undefined)?.[1] ?? ''),
+    }));
+  });
+}
+
+/**
+ * Records the account whose library the page shows. Called inside any write
+ * that stores a post, which must include the `meta` table.
+ */
+export function rememberAccount(db: LibraryDatabase, accountId: AccountId): Promise<unknown> {
+  return db.meta.put({ accountId: '', key: ACTIVE_ACCOUNT, value: accountId });
+}
+
+/** The account that most recently stored something, if any has. */
 export async function activeAccount(db: LibraryDatabase): Promise<AccountId | undefined> {
   const row = await db.meta.get(['', ACTIVE_ACCOUNT]);
   return typeof row?.value === 'string' ? row.value : undefined;
-}
-
-/** How many of the account's posts are both bookmarked and liked. */
-export function countInBoth(db: LibraryDatabase, accountId: AccountId): Promise<number> {
-  return db.posts
-    .where('[accountId+isBookmark+bookmarkSort]')
-    .between([accountId, 1, Dexie.minKey], [accountId, 1, Dexie.maxKey])
-    .filter((post) => post.isLike === 1)
-    .count();
 }
 
 /** The settings, with defaults for anything missing or not of the expected type. */
