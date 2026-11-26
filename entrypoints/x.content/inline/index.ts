@@ -7,7 +7,7 @@ import type { CapturedPost } from '@/src/capture/normalise';
 import { themeOfColour, type Theme } from '@/src/dom/theme';
 import { createKeyboardGuard, contain } from '@/src/inline/keyboard-guard';
 import { POPOVER_SUGGESTIONS } from '@/src/inline/popover-model';
-import { matchesShortcut } from '@/src/inline/shortcut';
+import { isShortcutPress, matchesShortcut, postAnchor } from '@/src/inline/shortcut';
 import { createTagState } from '@/src/inline/tag-state';
 import { createTagger } from '@/src/inline/tagger';
 import { createTagsListener, type ListeningPort } from '@/src/inline/tags-port';
@@ -106,7 +106,12 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
     },
     create: (postId) => {
       const button = createTagButton(postId, (control) => popover.toggle(control));
-      guard.protect(button.host);
+      // Keys on the button stay from the page, but Alt+T still works there.
+      guard.protect(button.host, (event) => {
+        if (!isShortcutPress(event)) return;
+        event.preventDefault();
+        popover.toggle(button);
+      });
       contain(button.host);
       return button;
     },
@@ -129,20 +134,20 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
     },
   });
 
-  // Alt+T on a focused post opens its popover.
+  // Alt+T on a focused post opens its popover, and focus comes back to the post.
   window.addEventListener(
     'keydown',
     (event) => {
       if (!matchesShortcut(event)) return;
       const focused = document.activeElement;
       const article = focused instanceof Element ? focused.closest(SELECTORS.post) : null;
-      if (!article) return;
+      if (!(article instanceof HTMLElement)) return;
       for (const group of buttons.values()) {
         for (const button of group) {
           if (article.contains(button.host)) {
             event.preventDefault();
             event.stopImmediatePropagation();
-            popover.toggle(button);
+            popover.toggle(postAnchor(button, article));
             return;
           }
         }

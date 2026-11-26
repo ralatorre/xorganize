@@ -239,10 +239,36 @@ test('opens from the keyboard, and gives focus back on close', async ({ context 
 
   await expect.poll(() => popoverOpen(site)).toBe(false);
   await expect.poll(() => tagButtons(site)).toEqual(['Tags: keyboard', 'Tag']);
-  // Focus is on the tag button again: the page sees only its host.
+  // Opened from the post, it gives focus back to the post, where X's j and k carry on.
+  expect(await site.evaluate(() => document.activeElement?.getAttribute('data-post'))).toBe('101');
+  // The page saw the Alt key go down on its own post, as with any key, and the
+  // Escape that closed the popover come up there. Nothing typed.
+  expect(await observed(site)).toEqual([
+    'window keydown Alt',
+    'document keydown Alt',
+    'window keyup Escape',
+    'document keyup Escape',
+  ]);
+
+  // And Alt+T opens it again.
+  await site.keyboard.press('Alt+t');
+  await expect.poll(() => popoverOpen(site)).toBe(true);
+});
+
+test('opens from the keyboard on a tag button that has focus', async ({ context }) => {
+  await serveStandIn(context);
+  const site = await openSite(context);
+
+  await tagHost(site, '101').click();
+  await expect.poll(() => popoverOpen(site)).toBe(true);
+  await site.keyboard.press('Escape');
+  await expect.poll(() => popoverOpen(site)).toBe(false);
+  // Opened by pointer, it gives focus back to the button, and the page saw no key.
   expect(await site.evaluate(() => document.activeElement?.tagName)).toBe('DIV');
-  // The page saw the Alt key go down on its own post, as with any key, and nothing after.
-  expect(await observed(site)).toEqual(['window keydown Alt', 'document keydown Alt']);
+
+  await site.keyboard.press('Alt+t');
+  await expect.poll(() => popoverOpen(site)).toBe(true);
+  expect(await observed(site)).toEqual([]);
 });
 
 test('a change in one tab shows in another', async ({ context }) => {

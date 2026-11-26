@@ -97,7 +97,7 @@ Behaviour:
 - Tag names are trimmed, with runs of spaces inside them made single, lower-cased for comparison, and limited to 50 characters. Invisible characters are not allowed, so two tags cannot look the same. A semicolon is not allowed, because it separates tags in CSV exports. The display keeps the casing of first creation.
 - The popover flips above the button when there is not enough space below, and is never clipped by the timeline column.
 
-Shortcut: `Alt+T` opens the popover for the post that currently has keyboard focus. It is configurable, and deliberately avoids X's own single-key shortcuts (`l`, `b`, `t`, `r` and others).
+Shortcut: `Alt+T` opens the popover for the post that currently has keyboard focus, or for the tag button that has it. It is configurable, and deliberately avoids X's own single-key shortcuts (`l`, `b`, `t`, `r` and others).
 
 ### 4.3 Tag prompt after bookmarking
 
@@ -308,7 +308,7 @@ The post loses that source. Depending on the "Keep posts" setting it stays in th
 - **Theme in the library:** follows the system setting, with a manual override.
 - **Isolation:** injected UI is rendered inside a shadow root so that X's styles and the extension's styles cannot affect each other.
 - **Tag colours:** a fixed palette of twelve colours, each with a light and dark variant that meets WCAG AA contrast for text. New tags get the next unused colour.
-- **Accessibility:** every control has an accessible name. The popover is a labelled dialog with a combobox and listbox, and returns focus to the tag button on close. All actions are reachable by keyboard. Motion respects `prefers-reduced-motion`. Colour is never the only indicator of state.
+- **Accessibility:** every control has an accessible name. The popover is a labelled dialog with a combobox and listbox. On close it returns focus to where it was opened from: the tag button, or the post when opened with the shortcut, so that X's `j` and `k` carry on from there. All actions are reachable by keyboard. Motion respects `prefers-reduced-motion`. Colour is never the only indicator of state.
 - **Branding:** the extension uses its own icon and name. It does not use X's logo or trademarks in its artwork.
 
 ## 8. Decisions
