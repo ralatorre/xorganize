@@ -177,7 +177,7 @@ Main column:
 - **No posts match** offers Clear filters, which returns to All with no tags and keeps the sort.
 - **Post card** shows avatar, name, handle, date, text, media thumbnails, a quoted post if present, and tag chips. The `[+]` chip opens the same tag popover as the inline button. "Open on X" opens the original in a new tab. The `⋯` menu offers Copy link and Remove from library. Remove asks first: the post's tags go with it, and a post still bookmarked or liked on X comes back the next time that page loads.
 - Changes made in the library show at once in open x.com tabs.
-- **Export view**, in the menu beside Sort, exports exactly the posts in the current filter as JSON or CSV (see 5.6).
+- **Export view**, beside Sort, exports exactly the posts in the current filter as JSON or CSV (see 5.6), and then says how many it exported.
 - A post that has been unbookmarked or deleted on X is still shown, with a muted "No longer bookmarked" or "Unavailable on X" label.
 - The list is virtualised, so tens of thousands of posts scroll smoothly.
 
@@ -231,6 +231,8 @@ The toolbar icon shows a small badge while a capture session is running.
 | Data | Import library (merge or replace) | |
 | Data | Backup reminder | Every 30 days |
 | Data | Delete all data | Requires typing a confirmation word |
+
+> **As first built:** until the settings page (M6), settings are under Settings at the bottom of the library's sidebar. "Show images from X" and "Export library" (JSON backup or CSV) are there.
 
 ## 5. Key flows
 

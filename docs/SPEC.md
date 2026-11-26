@@ -522,18 +522,22 @@ The worker checks `sender.id`, that the message comes from the top frame, and th
 - **Tag management** (built). The sidebar's tag panel renames, recolours, merges and deletes (9.1). Before a deletion, the page works out from the catalogue how many posts carry the tag and how many it alone keeps in the library (`src/library/tag-actions.ts`), and says so. Every change is announced to the worker (10, `src/library/edits.ts`).
 - **Card actions** (built). `[+]` opens the tag popover, with the tag state and optimistic changes used on x.com, reading and writing the database directly (`src/library/tagging.ts`). The `⋯` menu copies the post's link with `navigator.clipboard.writeText`, which needs no permission when the user has just clicked, and removes the post after a confirmation.
 - **Keyboard** (built, `src/library/shortcuts.ts`). Single keys outside a field or a dialog: `/`, `j`, `k`, `t`, `o` and `?`. Cards take focus, and a card not yet rendered is scrolled to and focused once it is. The library runs the same keyboard guard as x.com (8), so what is typed in the popover never reaches its shortcuts.
+- **Export** (built). Beside Sort, "Export view" offers JSON and CSV for the posts listed; under Settings, "Export library" offers a JSON backup and CSV (12). Each says how many posts it exported.
 - **Sharing code.** The side panel imports the same app with a `compact` flag. The tag popover is shared with the injected UI (`src/ui/`).
 
 ## 12. Import and export
 
-Export is a core feature. `src/transfer/` exposes one function, `exportPosts(scope, format)`, used by every entry point.
+Export is a core feature. `src/transfer/` exposes one function, `exportPosts(db, accountId, scope, format, now)` (`export.ts`, built), used by every control that exports. It reads the scope in one transaction (`read.ts`), so the file is a consistent picture, and returns the file's name, type and contents. Saving it is the page's job.
 
 | | `json` | `csv` |
 | --- | --- | --- |
 | `scope: "library"` | All posts, tags and assignments for the account. | One row per library post. |
 | `scope: { postIds }` | The given posts, the tags they use, and their assignments. | One row per given post. |
 
-The library's "Export view" resolves the current filter to a list of post IDs and passes it as the scope, so the export always matches what is on screen.
+The library's "Export view" resolves the current filter to a list of post IDs and passes it as the scope, so the export always matches what is on screen, in its order (`src/library/view-export.ts`). "Export library" in the library's Settings passes `"library"`.
+
+- **What a file holds.** "Library posts" are those bookmarked, liked or tagged. A JSON file also carries the stored posts that its posts quote, which have no source of their own, so that quotes still show after import. CSV leaves them out. A whole-library file holds every tag, used or not; a view's file holds the tags its posts carry.
+- **Saving** (`entrypoints/library/main.tsx`). The contents are built as parts, one per record, so a large library is never held as one string. The page joins them into a `Blob`, and an `<a download>` pointing at a `blob:` URL hands it to the browser, which saves it as a download. The URL is revoked after a minute. This needs no `downloads` permission (6.1), and nothing leaves the device.
 
 ### 12.1 JSON format
 
@@ -543,14 +547,16 @@ The library's "Export view" resolves the current filter to a list of post IDs an
   "version": 1,
   "exportedAt": "2026-01-01T00:00:00.000Z",
   "accountId": "0000000000",
-  "tags": [{ "id": "…", "name": "rust", "color": 3, "createdAt": 0 }],
+  "tags": [{ "id": "…", "name": "rust", "color": 3, "createdAt": 0, "lastUsedAt": 0 }],
   "posts": [{ "id": "…", "text": "…", "author": { "handle": "…", "name": "…" }, "isBookmark": 1, "isLike": 0 }],
   "postTags": [{ "postId": "…", "tagId": "…", "taggedAt": 0 }]
 }
 ```
 
 - Each post carries its source flags (`isBookmark`, `isLike`), so bookmarks and likes travel in the same file.
-- Export builds a `Blob` and triggers a download named `xorganize-export-YYYY-MM-DD.json`. A single-tag view adds the tag name: `xorganize-export-recipes-YYYY-MM-DD.json`.
+- A post holds every stored field (9.1) except `accountId`, which the file states once, and `hasTags`, which import works out again from `postTags`. Its sort keys are kept, so that bookmarks and likes keep X's order. Times are epoch milliseconds, as stored; only `exportedAt` is ISO 8601.
+- The file is written with one record on each line, so it can be read and compared as text.
+- Export builds a `Blob` and triggers a download named `xorganize-export-YYYY-MM-DD.json`, with the user's local date. A view of exactly one tag, chosen in the sidebar, adds the tag name: `xorganize-export-recipes-YYYY-MM-DD.json`. In the name, letters and digits of any script are kept, lower-cased, and every run of anything else, `/` included, becomes one `-`, up to 50 characters (`filename.ts`). A name with nothing left is omitted.
 - A scoped file has the same format as a full one, with `"scope": "partial"` added. It is importable like any other.
 - The file contains library data only. It never contains cookies, tokens or settings.
 - The format version is independent of the database schema version. Importers must accept every earlier format version.
@@ -572,7 +578,7 @@ UTF-8 with a byte order mark (so spreadsheet applications detect the encoding), 
 | `text` | Full post text. |
 | `media_urls` | Separated by a space. |
 
-Cells that begin with `=`, `+`, `-`, `@`, tab or carriage return are prefixed with a single quote, so that post text cannot be interpreted as a spreadsheet formula. CSV is export-only.
+Rows end in CRLF. A cell is quoted only when it holds a comma, a double quote or a line break, and double quotes inside it are doubled. Tags are listed in the order they were applied. Cells that begin with `=`, `+`, `-`, `@`, tab or carriage return are prefixed with a single quote, so that post text cannot be interpreted as a spreadsheet formula. CSV is export-only (`csv.ts`).
 
 ### 12.3 Import
 
@@ -649,7 +655,7 @@ The repository is public, so the following never get committed:
 | M1 Capture | Interceptor, bridge, extraction, normalisation, database, account detection, capture banner without auto-scroll, for both the Bookmarks and Likes timelines. Verify every assumption in section 18. | Scrolling the Bookmarks page and the Likes tab fills the database, confirmed against a real free account. |
 | M2 Tagging | Tag button, popover, seen cache, DOM fallback, tag messages. **Built.** Confirmed against a real account on 2026-11-25, Alt+T with `j`/`k` focus after a fix (18.1, 14). | A post can be tagged from any timeline and the state survives a reload. |
 | M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. Avatars and thumbnails were brought forward and are done. **Browsing built**: sources, tag sidebar with groups, tag filters, sort, tag chips and quoted posts on cards, virtualised list. **Search built**: text, `#tag` and `@handle`, the `/` shortcut. **Tag management built**: rename, recolour, merge and delete, the card's `[+]` and `⋯` menu, the `j`/`k`/`t`/`o`/`?` shortcuts. The `x` shortcut comes with bulk actions in M6. | A tagged post can be found by tag and by text. |
-| M4 Export | JSON and CSV export for the whole library and the current view, import with merge and replace, backup reminder, delete all. | Export then import into a clean profile reproduces the library, and a single tag can be exported to CSV. |
+| M4 Export | JSON and CSV export for the whole library and the current view, import with merge and replace, backup reminder, delete all. **Export built**: JSON and CSV, for the whole library and the view. | Export then import into a clean profile reproduces the library, and a single tag can be exported to CSV. |
 | M5 Live capture | Bookmark and like mutations, tag prompt toast, auto-scroll. | Bookmarking or liking a post anywhere adds it without visiting the Bookmarks or Likes page. |
 | M6 Release | Side panel, popup, settings, welcome page, bulk actions, accessibility pass, Firefox build, store listing. | Published to the Chrome Web Store and Firefox Add-ons. |
 

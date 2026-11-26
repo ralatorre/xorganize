@@ -11,14 +11,17 @@ import { loadPosts } from '@/src/library/posts';
 import { createLibraryTagging } from '@/src/library/tagging';
 import { TAGS_CHANNEL, type TagsEditedNotice } from '@/src/messaging/protocol';
 import { createSearchClient } from '@/src/search/client';
+import { exportPosts, type ExportedFile } from '@/src/transfer/export';
+import type { ExportFormat } from '@/src/transfer/format';
+import type { ExportScope } from '@/src/transfer/read';
 import { createPopover } from '@/src/ui/popover';
 import { App } from './App';
 import { Diagnostics } from './Diagnostics';
 import './style.css';
 
-// Wiring only: the real database, the search worker, the clipboard, the
-// channel that tells open x.com tabs about edits, and, in the diagnostics
-// build, its store.
+// Wiring only: the real database, the search worker, the clipboard, file
+// downloads, the channel that tells open x.com tabs about edits, and, in the
+// diagnostics build, its store.
 const db = library();
 const catalogue = () => loadCatalogue(db);
 const authorOrder = (accountId: AccountId) => loadAuthorOrder(db, accountId);
@@ -36,6 +39,30 @@ const copy = (text: string) =>
   navigator.clipboard.writeText(text).then(
     () => true,
     () => false,
+  );
+
+/** Long enough for the browser to have read a download's contents. */
+const DOWNLOAD_URL_LIFETIME_MS = 60_000;
+
+// A file is handed to the browser as a download from a local blob: no
+// permission is needed, and nothing leaves the device.
+const save = (file: ExportedFile) => {
+  const url = URL.createObjectURL(new Blob(file.parts, { type: file.type }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_LIFETIME_MS);
+};
+const exportTo = (accountId: AccountId, scope: ExportScope, format: ExportFormat) =>
+  exportPosts(db, accountId, scope, format, new Date()).then(
+    (file) => {
+      save(file);
+      return file.count;
+    },
+    () => undefined,
   );
 
 // Typing in the popover goes to the popover alone, not to the page's shortcuts.
@@ -61,6 +88,7 @@ if (root) {
       edits={edits}
       createPopover={popoverFor}
       copy={copy}
+      exportPosts={exportTo}
       setRemoteImages={setRemoteImages}
     >
       {DIAGNOSTICS ? <Diagnostics store={createDiagnosticsStore(indexedDB)} /> : null}

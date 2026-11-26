@@ -6,11 +6,15 @@ import type { LibraryEdits } from '@/src/library/edits';
 import { summaryOf } from '@/src/library/format';
 import { deletionImpact, deletionMessage } from '@/src/library/tag-actions';
 import { DEFAULT_VIEW, changeView } from '@/src/library/view';
+import { viewScope } from '@/src/library/view-export';
 import type { SearchClient } from '@/src/search/client';
 import { parseQuery } from '@/src/search/query';
+import type { ExportFormat } from '@/src/transfer/format';
+import type { ExportScope } from '@/src/transfer/read';
 import { buttonAnchor, type Popover } from '@/src/ui/popover';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { EmptyLibrary } from './components/EmptyLibrary';
+import { ExportControl } from './components/ExportControl';
 import { FilterBar } from './components/FilterBar';
 import { ImageSetting } from './components/ImageSetting';
 import { NoMatches } from './components/NoMatches';
@@ -42,11 +46,20 @@ export interface LibraryProps {
   createPopover(accountId: AccountId): Popover;
   /** Puts text on the clipboard. False if the browser refused. */
   copy(text: string): Promise<boolean>;
+  /** Exports posts to a file the browser saves. Resolves to how many, or undefined if it failed. */
+  exportPosts(
+    accountId: AccountId,
+    scope: ExportScope,
+    format: ExportFormat,
+  ): Promise<number | undefined>;
   /** Turns images from X on or off. */
   setRemoteImages(enabled: boolean): void;
   /** Shown below the library: the diagnostics panel, in that build. */
   children?: ComponentChildren;
 }
+
+const LIBRARY_FORMATS: Record<ExportFormat, string> = { json: 'JSON backup', csv: 'CSV' };
+const VIEW_FORMATS: Record<ExportFormat, string> = { json: 'JSON', csv: 'CSV' };
 
 /** A question the library is asking, or the shortcut list. */
 type Dialog =
@@ -61,6 +74,7 @@ type Dialog =
  */
 export function App(props: LibraryProps) {
   const { catalogue, authorOrder, posts, search, edits, copy, setRemoteImages, children } = props;
+  const { exportPosts } = props;
   const [view, change] = useReducer(changeView, DEFAULT_VIEW);
   const [dialog, setDialog] = useState<Dialog>();
   const searchInput = useRef<HTMLInputElement>(null);
@@ -143,6 +157,11 @@ export function App(props: LibraryProps) {
         <section class="sidebar__section" aria-labelledby="settings-title">
           <h2 id="settings-title">Settings</h2>
           <ImageSetting enabled={state.settings.remoteImages} onChange={setRemoteImages} />
+          <ExportControl
+            label="Export library"
+            formats={LIBRARY_FORMATS}
+            onExport={(format) => exportPosts(accountId, 'library', format)}
+          />
         </section>
       </Sidebar>
       <main class="library__main">
@@ -156,7 +175,15 @@ export function App(props: LibraryProps) {
           status={summaryOf(text, state.ids.length)}
           sort={view.sort}
           onSort={(sort) => change({ type: 'sort', sort })}
-        />
+        >
+          {listed && state.ids.length > 0 ? (
+            <ExportControl
+              label="Export view"
+              formats={VIEW_FORMATS}
+              onExport={(format) => exportPosts(accountId, viewScope(state), format)}
+            />
+          ) : null}
+        </ViewSummary>
         {!listed ? null : state.ids.length > 0 ? (
           <PostList
             accountId={accountId}
