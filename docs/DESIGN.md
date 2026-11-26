@@ -283,7 +283,7 @@ Export is a core feature, not only a safety net. There are two scopes and two fo
 - A CSV row holds the post link, author, dates, sources (bookmark, like), the tags as one delimited column, and the text.
 - Post IDs are longer than a spreadsheet can hold as a number. Opened with default settings, LibreOffice and Excel round them, and a sheet saved that way keeps the wrong IDs. Choosing Text for the ID column on import keeps them exact (in LibreOffice, ticking "Format quoted field as text" does it). The post link always carries the exact ID.
 - Files are named with the date, and with the tag name when a single tag is exported. They never contain cookies, tokens or anything other than library data.
-- Import accepts JSON only. It shows a preview ("1,950 posts, 40 tags, 1,203 tag assignments") and a choice of **Merge** (default; unions tags and keeps the newer copy of each post) or **Replace**.
+- Import accepts JSON only (decision 8). It shows a preview ("1,950 posts, 40 tags, 1,203 tag assignments") and a choice of **Merge** (default; unions tags and keeps the newer copy of each post) or **Replace**.
 - If the last backup is older than the reminder interval, the popup and the library show a quiet reminder.
 
 ### 5.7 Unbookmark or unlike
@@ -323,3 +323,4 @@ The post loses that source. Depending on the "Keep posts" setting it stays in th
 5. **The side panel does not follow the page in v1.** It is a compact library and nothing more.
 6. **Deleting a tag removes the posts only it kept.** A post that is in the library only because it was tagged leaves when it loses its last tag, whether that tag is taken off or deleted. Keeping it would leave a post that no source and no tag lists, which nothing could show or clean up. A tag deletion never removes a bookmarked or liked post, and its confirmation states how many posts will leave (4.5).
 7. **Removing a post does not touch X.** Following decision 4, Remove from library does not unbookmark or unlike the post. A post still bookmarked or liked on X therefore comes back the next time that page is captured, and the confirmation says so (4.5). To keep it out, unbookmark or unlike it on X as well.
+8. **The JSON backup is the only way to restore.** CSV is for reading the library elsewhere and is never imported. A CSV row has no tag colours, no unused tags, no order from X, no media details, links or quoted posts, and no tagging times, so a library restored from it would be poorer than the one exported. A sheet saved from a spreadsheet may also hold rounded post IDs (5.6), which an import could not tell from real ones.
