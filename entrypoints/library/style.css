@@ -782,6 +782,14 @@ a:focus-visible {
   color: var(--muted);
 }
 
+div.modal__message p {
+  margin: 0 0 8px;
+}
+
+div.modal__message p:last-child {
+  margin-bottom: 0;
+}
+
 .modal__buttons {
   display: flex;
   justify-content: flex-end;
@@ -835,7 +843,8 @@ kbd {
 }
 
 .library__setting + .export,
-.sidebar__section .export {
+.sidebar__section .export,
+.library__empty .import {
   margin: 8px 0 0;
   font-size: 0.875rem;
 }

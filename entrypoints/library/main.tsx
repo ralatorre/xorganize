@@ -7,6 +7,7 @@ import { createDiagnosticsStore } from '@/src/diagnostics/store';
 import { createKeyboardGuard } from '@/src/inline/keyboard-guard';
 import { loadAuthorOrder, loadCatalogue } from '@/src/library/browse';
 import { createLibraryEdits } from '@/src/library/edits';
+import { createLibraryImport } from '@/src/library/importer';
 import { loadPosts } from '@/src/library/posts';
 import { createLibraryTagging } from '@/src/library/tagging';
 import { TAGS_CHANNEL, type TagsEditedNotice } from '@/src/messaging/protocol';
@@ -32,9 +33,10 @@ const search = createSearchClient(
 const setRemoteImages = (enabled: boolean) => void updateSettings(db, { remoteImages: enabled });
 
 const channel = new BroadcastChannel(TAGS_CHANNEL);
-const edits = createLibraryEdits(db, (accountId) =>
-  channel.postMessage({ type: 'tags/edited', accountId } satisfies TagsEditedNotice),
-);
+const announce = (accountId: AccountId) =>
+  channel.postMessage({ type: 'tags/edited', accountId } satisfies TagsEditedNotice);
+const edits = createLibraryEdits(db, announce);
+const importer = createLibraryImport(db, announce);
 const copy = (text: string) =>
   navigator.clipboard.writeText(text).then(
     () => true,
@@ -89,6 +91,7 @@ if (root) {
       createPopover={popoverFor}
       copy={copy}
       exportPosts={exportTo}
+      importer={importer}
       setRemoteImages={setRemoteImages}
     >
       {DIAGNOSTICS ? <Diagnostics store={createDiagnosticsStore(indexedDB)} /> : null}
