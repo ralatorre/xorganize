@@ -230,9 +230,11 @@ The toolbar icon shows a small badge while a capture session is running.
 | Data | Export library (JSON backup, or CSV) | |
 | Data | Import library (merge or replace) | |
 | Data | Backup reminder | Every 30 days |
-| Data | Delete all data | Requires typing a confirmation word |
+| Data | Delete all data | Requires typing a confirmation word. Deletes every account's posts, tags and tag assignments; keeps settings |
 
-> **As first built:** until the settings page (M6), settings are under Settings at the bottom of the library's sidebar. "Show images from X", "Export library" (JSON backup or CSV) and "Import backup" are there.
+> **As first built:** until the settings page (M6), settings are under Settings at the bottom of the library's sidebar: "Show images from X", "Export library" (JSON backup or CSV), "Import backup", "Backup reminder" and "Delete all data…". The backup reminder shows in the library only, above the search box, until the popup (M6).
+>
+> "Delete all data…" opens a dialog that says what goes and what stays: every post, tag and tag assignment, for every X account in this browser; settings stay, so that a choice such as not loading images from X is not undone; nothing on X changes. Its button stays disabled until "delete" is typed, in any case. Cancel has focus first. Afterwards the library shows its empty state, from which a backup can be restored.
 
 ## 5. Key flows
 
@@ -288,7 +290,11 @@ Export is a core feature, not only a safety net. There are two scopes and two fo
 - A view's file holds part of a library, so it can only be merged: the preview says so and offers no Replace.
 - A file is imported into the X account it was exported from, and the library then shows that account. The preview says so when it is not the account shown.
 - An empty library offers "Restore from a backup", so a new profile can be filled from a backup before anything is captured.
-- If the last backup is older than the reminder interval, the popup and the library show a quiet reminder.
+- If the last backup is older than the reminder interval, the popup and the library show a quiet reminder: "Your last backup was 45 days ago", or "Your library has not been backed up yet", with **Back up now** and **Remind me later**.
+  - Only a JSON backup of the whole library counts, because only that can restore it. A CSV or a view's file does not.
+  - A library that has never been backed up is reminded once the interval has passed since its first post was saved, not on its first day.
+  - **Remind me later** starts the interval again, so the reminder does not come back on every visit.
+  - The interval is a setting (4.7): every week, every 30 days (the default), every 90 days, or never.
 
 ### 5.7 Unbookmark or unlike
 

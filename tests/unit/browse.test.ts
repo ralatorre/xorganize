@@ -333,7 +333,7 @@ describe('reading the library', () => {
     await updateSettings(db, { remoteImages: false });
     expect(await loadCatalogue(db)).toEqual({
       ...EMPTY_CATALOGUE,
-      settings: { remoteImages: false },
+      settings: { remoteImages: false, backupReminderDays: 30 },
     });
     expect((await loadBrowse(DEFAULT_VIEW)).ids).toEqual([]);
   });
@@ -349,7 +349,7 @@ describe('reading the library', () => {
     ]);
     expect(browse.ids).toEqual(['31', '21', '13', '12', '11']);
     expect(browse.selected).toEqual([]);
-    expect(browse.settings).toEqual({ remoteImages: true });
+    expect(browse.settings).toEqual({ remoteImages: true, backupReminderDays: 30 });
   });
 
   it('keeps each timeline in its own order', async () => {

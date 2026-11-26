@@ -6,7 +6,7 @@ import Dexie from 'dexie';
 import type { CapturedPost } from '@/src/capture/normalise';
 import type { SourceKind } from '@/src/capture/operations';
 import type { LibraryDatabase } from './schema';
-import type { AccountId, Counts, PostId, Settings, StoredPost } from './types';
+import type { AccountId, BackupTimes, Counts, PostId, Settings, StoredPost } from './types';
 
 export interface CaptureBatch {
   accountId: AccountId;
@@ -22,8 +22,13 @@ export interface CaptureBatch {
 
 const ACTIVE_ACCOUNT = 'activeAccount';
 const SETTINGS = 'settings';
+const LAST_BACKUP = 'lastBackupAt';
+const REMINDER_DISMISSED = 'backupReminderDismissedAt';
 
-export const DEFAULT_SETTINGS: Readonly<Settings> = { remoteImages: true };
+/** How often the backup reminder can be set to come back, in days. 0 turns it off. */
+export const BACKUP_REMINDER_DAYS = [7, 30, 90, 0] as const;
+
+export const DEFAULT_SETTINGS: Readonly<Settings> = { remoteImages: true, backupReminderDays: 30 };
 const SORT_WIDTH = 30;
 
 /**
@@ -348,9 +353,12 @@ export async function activeAccount(db: LibraryDatabase): Promise<AccountId | un
 export async function readSettings(db: LibraryDatabase): Promise<Settings> {
   const row = await db.meta.get(['', SETTINGS]);
   const stored = typeof row?.value === 'object' && row.value !== null ? row.value : {};
-  const { remoteImages } = stored as Partial<Record<keyof Settings, unknown>>;
+  const { remoteImages, backupReminderDays } = stored as Partial<Record<keyof Settings, unknown>>;
   return {
     remoteImages: typeof remoteImages === 'boolean' ? remoteImages : DEFAULT_SETTINGS.remoteImages,
+    backupReminderDays: (BACKUP_REMINDER_DAYS as readonly unknown[]).includes(backupReminderDays)
+      ? (backupReminderDays as number)
+      : DEFAULT_SETTINGS.backupReminderDays,
   };
 }
 
@@ -359,5 +367,64 @@ export function updateSettings(db: LibraryDatabase, changes: Partial<Settings>):
     const settings = { ...(await readSettings(db)), ...changes };
     await db.meta.put({ accountId: '', key: SETTINGS, value: settings });
     return settings;
+  });
+}
+
+/** Records a whole-library JSON export: the backup the reminder counts from. */
+export function recordBackup(db: LibraryDatabase, accountId: AccountId, time: number) {
+  return db.meta.put({ accountId, key: LAST_BACKUP, value: time });
+}
+
+/** Puts the backup reminder off for one interval. */
+export function dismissBackupReminder(db: LibraryDatabase, accountId: AccountId, time: number) {
+  return db.meta.put({ accountId, key: REMINDER_DISMISSED, value: time });
+}
+
+/** What the backup reminder needs. Times that are not numbers are left out. */
+export async function backupTimes(db: LibraryDatabase, accountId: AccountId): Promise<BackupTimes> {
+  return db.transaction('r', db.meta, db.posts, async () => {
+    const [backup, dismissed, oldest] = await Promise.all([
+      db.meta.get([accountId, LAST_BACKUP]),
+      db.meta.get([accountId, REMINDER_DISMISSED]),
+      db.posts
+        .where('[accountId+savedAt]')
+        .between(...allOf(accountId))
+        .first(),
+    ]);
+    const time = (value: unknown) =>
+      typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+    const lastBackupAt = time(backup?.value);
+    const dismissedAt = time(dismissed?.value);
+    return {
+      ...(lastBackupAt !== undefined ? { lastBackupAt } : {}),
+      ...(dismissedAt !== undefined ? { dismissedAt } : {}),
+      ...(oldest ? { startedAt: oldest.savedAt } : {}),
+    };
+  });
+}
+
+/**
+ * Deletes every account's posts, tags and tag assignments, and what is
+ * recorded about them (DESIGN, 5.6). Settings are kept, so that a choice
+ * such as not loading images from X survives. Returns the accounts that had
+ * data, so that open x.com tabs can be told.
+ */
+export async function deleteAllData(db: LibraryDatabase): Promise<AccountId[]> {
+  return db.transaction('rw', db.posts, db.tags, db.postTags, db.meta, async () => {
+    const [posts, tags, meta] = await Promise.all([
+      db.posts.toCollection().primaryKeys(),
+      db.tags.toCollection().primaryKeys(),
+      db.meta.toCollection().primaryKeys(),
+    ]);
+    const accounts = new Set([...posts, ...tags].map(([accountId]) => accountId));
+    await Promise.all([
+      db.posts.clear(),
+      db.tags.clear(),
+      db.postTags.clear(),
+      db.meta.bulkDelete(
+        meta.filter(([accountId, key]) => !(accountId === '' && key === SETTINGS)),
+      ),
+    ]);
+    return [...accounts].sort();
   });
 }

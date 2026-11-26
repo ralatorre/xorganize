@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'preact/hooks';
 import type { AccountId, PostId, TagSuggestion } from '@/src/db/types';
+import { backupReminder, reminderMessage } from '@/src/library/backup-reminder';
 import { EMPTY_CATALOGUE, browseView, type Catalogue } from '@/src/library/browse';
 import type { LibraryEdits } from '@/src/library/edits';
 import { summaryOf } from '@/src/library/format';
@@ -15,7 +16,9 @@ import { parseQuery } from '@/src/search/query';
 import type { ExportFormat } from '@/src/transfer/format';
 import type { ExportScope } from '@/src/transfer/read';
 import { buttonAnchor, type Popover } from '@/src/ui/popover';
+import { BackupReminder } from './components/BackupReminder';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { DeleteAllDialog } from './components/DeleteAllDialog';
 import { EmptyLibrary } from './components/EmptyLibrary';
 import { ExportControl } from './components/ExportControl';
 import { FilterBar } from './components/FilterBar';
@@ -25,6 +28,7 @@ import { ImportDialog } from './components/ImportDialog';
 import { NoMatches } from './components/NoMatches';
 import type { PostActions } from './components/PostCard';
 import { PostList } from './components/PostList';
+import { ReminderSetting } from './components/ReminderSetting';
 import { SearchBox } from './components/SearchBox';
 import { ShortcutHelp } from './components/ShortcutHelp';
 import { Sidebar } from './components/Sidebar';
@@ -61,6 +65,12 @@ export interface LibraryProps {
   importer: LibraryImport;
   /** Turns images from X on or off. */
   setRemoteImages(enabled: boolean): void;
+  /** Sets how many days after a backup the library reminds the user. 0: never. */
+  setBackupReminder(days: number): void;
+  /** Puts the backup reminder off for one interval. */
+  dismissBackupReminder(accountId: AccountId): void;
+  /** The time, in epoch milliseconds. */
+  now(): number;
   /** Shown below the library: the diagnostics panel, in that build. */
   children?: ComponentChildren;
 }
@@ -72,6 +82,7 @@ const VIEW_FORMATS: Record<ExportFormat, string> = { json: 'JSON', csv: 'CSV' };
 type Dialog =
   | { kind: 'delete-tag'; tag: TagSuggestion }
   | { kind: 'remove-post'; postId: PostId }
+  | { kind: 'delete-all' }
   | { kind: 'shortcuts' };
 
 /**
@@ -81,7 +92,7 @@ type Dialog =
  */
 export function App(props: LibraryProps) {
   const { catalogue, authorOrder, posts, search, edits, copy, setRemoteImages, children } = props;
-  const { exportPosts, importer } = props;
+  const { exportPosts, importer, setBackupReminder, dismissBackupReminder, now } = props;
   const [view, change] = useReducer(changeView, DEFAULT_VIEW);
   const [flow, step] = useReducer(changeImport, IDLE);
   const [dialog, setDialog] = useState<Dialog>();
@@ -183,6 +194,8 @@ export function App(props: LibraryProps) {
     onRemove: (postId) => setDialog({ kind: 'remove-post', postId }),
   };
   const closeDialog = () => setDialog(undefined);
+  const time = now();
+  const reminder = backupReminder(library.backup, state.settings.backupReminderDays, time);
 
   // Until the text search answers, the list would show posts it may not match.
   const listed = text.state === 'none' || text.state === 'done';
@@ -204,9 +217,26 @@ export function App(props: LibraryProps) {
             onExport={(format) => exportPosts(accountId, 'library', format)}
           />
           {importControl('Import backup')}
+          <ReminderSetting days={state.settings.backupReminderDays} onChange={setBackupReminder} />
+          <div class="export">
+            <button
+              type="button"
+              class="export__format export__format--danger"
+              onClick={() => setDialog({ kind: 'delete-all' })}
+            >
+              Delete all data…
+            </button>
+          </div>
         </section>
       </Sidebar>
       <main class="library__main">
+        {reminder.due ? (
+          <BackupReminder
+            message={reminderMessage(reminder, time)}
+            onBackUp={() => exportPosts(accountId, 'library', 'json')}
+            onLater={() => dismissBackupReminder(accountId)}
+          />
+        ) : null}
         <SearchBox
           query={view.query}
           onChange={(query) => change({ type: 'query', query })}
@@ -258,6 +288,14 @@ export function App(props: LibraryProps) {
           confirm="Remove"
           onConfirm={() => {
             void edits.removePost(accountId, dialog.postId);
+            closeDialog();
+          }}
+          onCancel={closeDialog}
+        />
+      ) : dialog?.kind === 'delete-all' ? (
+        <DeleteAllDialog
+          onDelete={() => {
+            void edits.deleteAll();
             closeDialog();
           }}
           onCancel={closeDialog}
