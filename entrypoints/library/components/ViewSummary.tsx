@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact';
 import { SORT_ORDERS, type SortOrder } from '@/src/library/view';
 
 const LABELS: Record<SortOrder, string> = {
@@ -6,11 +7,15 @@ const LABELS: Record<SortOrder, string> = {
   author: 'Author (A to Z)',
 };
 
-/** How many posts match, or how the search is going, and the order they are in. */
+/**
+ * How many posts match, or how the search is going, and the order they are
+ * in. `children` go beside the order: the view's export.
+ */
 export function ViewSummary(props: {
   status: string;
   sort: SortOrder;
   onSort(sort: SortOrder): void;
+  children?: ComponentChildren;
 }) {
   return (
     <div class="summary">
@@ -33,6 +38,7 @@ export function ViewSummary(props: {
           ))}
         </select>
       </label>
+      {props.children}
     </div>
   );
 }
