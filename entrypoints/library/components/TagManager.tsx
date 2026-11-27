@@ -16,6 +16,8 @@ export interface TagManagement {
 
 type Mode = 'menu' | 'rename' | 'colour' | 'merge';
 
+const QUIET = 'button button--small button--quiet';
+
 /**
  * The panel under a tag in the sidebar (DESIGN, 4.5): Rename, Change colour,
  * Merge into another tag, and Delete. Esc closes it.
@@ -47,16 +49,20 @@ export function TagManager(props: {
     >
       {mode === 'menu' ? (
         <div class="manage__actions">
-          <button ref={first} type="button" onClick={() => setMode('rename')}>
+          <button ref={first} type="button" class={QUIET} onClick={() => setMode('rename')}>
             Rename
           </button>
-          <button type="button" onClick={() => setMode('colour')}>
+          <button type="button" class={QUIET} onClick={() => setMode('colour')}>
             Change colour
           </button>
-          <button type="button" onClick={() => setMode('merge')}>
+          <button type="button" class={QUIET} onClick={() => setMode('merge')}>
             Merge into…
           </button>
-          <button type="button" class="manage__danger" onClick={() => manage.remove(tag)}>
+          <button
+            type="button"
+            class={`${QUIET} manage__danger`}
+            onClick={() => manage.remove(tag)}
+          >
             Delete…
           </button>
         </div>

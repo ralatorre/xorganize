@@ -15,7 +15,7 @@ export function ImportControl(props: {
     <div class="export import">
       <button
         type="button"
-        class="export__format"
+        class="button button--small"
         disabled={props.busy}
         onClick={() => input.current?.click()}
       >

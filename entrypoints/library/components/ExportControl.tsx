@@ -33,7 +33,7 @@ export function ExportControl(props: {
         <button
           key={format}
           type="button"
-          class="export__format"
+          class="button button--small"
           disabled={busy}
           onClick={() => run(format)}
         >

@@ -325,7 +325,7 @@ test('deletes all data once the word is typed, keeping settings', async ({
 }) => {
   const page = await context.newPage();
   await openLibrary(page, extensionId);
-  await page.getByRole('checkbox', { name: /Show images from X/ }).uncheck();
+  await page.getByRole('switch', { name: /Show images from X/ }).uncheck();
 
   await page.getByRole('button', { name: 'Delete all data…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete all data?' });
@@ -352,6 +352,10 @@ test('deletes all data once the word is typed, keeping settings', async ({
   expect(await rows(page, 'tags')).toEqual([]);
   expect(await rows(page, 'postTags')).toEqual([]);
   expect(await rows(page, 'meta')).toEqual([
-    { accountId: '', key: 'settings', value: { remoteImages: false, backupReminderDays: 30 } },
+    {
+      accountId: '',
+      key: 'settings',
+      value: { remoteImages: false, backupReminderDays: 30, theme: 'x' },
+    },
   ]);
 });

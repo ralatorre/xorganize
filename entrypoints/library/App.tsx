@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'preact/hooks';
-import type { AccountId, PostId, TagSuggestion } from '@/src/db/types';
+import type { AccountId, PostId, TagSuggestion, ThemeSetting as ThemeChoice } from '@/src/db/types';
+import type { Theme } from '@/src/dom/theme';
 import { backupReminder, reminderMessage } from '@/src/library/backup-reminder';
 import { EMPTY_CATALOGUE, browseView, type Catalogue } from '@/src/library/browse';
 import type { LibraryEdits } from '@/src/library/edits';
@@ -33,12 +34,14 @@ import { SearchBox } from './components/SearchBox';
 import { ShortcutHelp } from './components/ShortcutHelp';
 import { Sidebar } from './components/Sidebar';
 import type { TagManagement } from './components/TagManager';
+import { ThemeSetting } from './components/ThemeSetting';
 import { ViewSummary } from './components/ViewSummary';
 import type { PostNavigation } from './use-post-navigation';
 import type { LoadPosts } from './use-post-views';
 import { useLiveQuery } from './use-live-query';
 import { useShortcuts } from './use-shortcuts';
 import { useTextSearch } from './use-text-search';
+import { useTheme, type ColourScheme } from './use-theme';
 
 export interface LibraryProps {
   /** Reads the library's sources and tags. Re-run whenever the data it read changes. */
@@ -65,6 +68,12 @@ export interface LibraryProps {
   importer: LibraryImport;
   /** Turns images from X on or off. */
   setRemoteImages(enabled: boolean): void;
+  /** Chooses the library's theme. */
+  setTheme(theme: ThemeChoice): void;
+  /** Whether the system asks for dark colours, for the System and Match X themes. */
+  colourScheme: ColourScheme;
+  /** Shows the library in a theme. */
+  applyTheme(theme: Theme): void;
   /** Sets how many days after a backup the library reminds the user. 0: never. */
   setBackupReminder(days: number): void;
   /** Puts the backup reminder off for one interval. */
@@ -93,6 +102,7 @@ type Dialog =
 export function App(props: LibraryProps) {
   const { catalogue, authorOrder, posts, search, edits, copy, setRemoteImages, children } = props;
   const { exportPosts, importer, setBackupReminder, dismissBackupReminder, now } = props;
+  const { setTheme, colourScheme, applyTheme } = props;
   const [view, change] = useReducer(changeView, DEFAULT_VIEW);
   const [flow, step] = useReducer(changeImport, IDLE);
   const [dialog, setDialog] = useState<Dialog>();
@@ -101,6 +111,11 @@ export function App(props: LibraryProps) {
 
   const library = useLiveQuery(catalogue, EMPTY_CATALOGUE);
   const account = library?.account;
+  useTheme(
+    library && { setting: library.settings.theme, xTheme: library.xTheme },
+    colourScheme,
+    applyTheme,
+  );
   const query = useMemo(() => parseQuery(view.query), [view.query]);
   const text = useTextSearch(search, account, query);
 
@@ -210,6 +225,7 @@ export function App(props: LibraryProps) {
       >
         <section class="sidebar__section" aria-labelledby="settings-title">
           <h2 id="settings-title">Settings</h2>
+          <ThemeSetting theme={state.settings.theme} onChange={setTheme} />
           <ImageSetting enabled={state.settings.remoteImages} onChange={setRemoteImages} />
           <ExportControl
             label="Export library"
@@ -221,7 +237,7 @@ export function App(props: LibraryProps) {
           <div class="export">
             <button
               type="button"
-              class="export__format export__format--danger"
+              class="button button--small button--danger-outline"
               onClick={() => setDialog({ kind: 'delete-all' })}
             >
               Delete all data…

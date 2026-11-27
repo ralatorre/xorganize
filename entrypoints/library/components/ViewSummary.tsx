@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { SORT_ORDERS, type SortOrder } from '@/src/library/view';
+import { Select } from './Select';
 
 const LABELS: Record<SortOrder, string> = {
   saved: 'Saved (newest)',
@@ -24,7 +25,7 @@ export function ViewSummary(props: {
       </p>
       <label class="summary__sort">
         Sort:{' '}
-        <select
+        <Select
           value={props.sort}
           onChange={(event) => {
             const chosen = SORT_ORDERS.find((order) => order === event.currentTarget.value);
@@ -36,7 +37,7 @@ export function ViewSummary(props: {
               {LABELS[order]}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       {props.children}
     </div>

@@ -23,12 +23,7 @@ export function ImportDialog(props: {
         {props.canReplace ? <p>{REPLACE_WARNING}</p> : null}
       </div>
       <div class="modal__buttons">
-        <button
-          type="button"
-          class="button button--quiet"
-          disabled={props.busy}
-          onClick={props.onCancel}
-        >
+        <button type="button" class="button" disabled={props.busy} onClick={props.onCancel}>
           Cancel
         </button>
         {props.canReplace ? (
@@ -43,7 +38,7 @@ export function ImportDialog(props: {
         ) : null}
         <button
           type="button"
-          class="button"
+          class="button button--primary"
           autofocus
           disabled={props.busy}
           onClick={props.onMerge}

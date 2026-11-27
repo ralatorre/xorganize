@@ -10,6 +10,7 @@ import { POPOVER_SUGGESTIONS } from '@/src/inline/popover-model';
 import { isShortcutPress, matchesShortcut, postAnchor } from '@/src/inline/shortcut';
 import { createTagState } from '@/src/inline/tag-state';
 import { createTagger } from '@/src/inline/tagger';
+import { createThemeReport } from '@/src/inline/theme-report';
 import { createTagsListener, type ListeningPort } from '@/src/inline/tags-port';
 import { SELECTORS } from '@/src/dom/selectors';
 import {
@@ -38,6 +39,9 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
   const buttons = new Map<string, Set<TagButton>>();
   const unwatch = new Map<TagButton, () => void>();
   let theme: Theme = 'light';
+  const reportTheme = createThemeReport(
+    (seen) => void deps.send({ type: 'theme/seen', theme: seen }),
+  );
 
   const withAccount = <Message extends RuntimeMessage>(build: (accountId: string) => Message) => {
     const accountId = deps.accountId();
@@ -102,7 +106,9 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
   startMounter<TagButton>({
     enabled: () => deps.accountId() !== undefined,
     beforeCheck: () => {
-      if (document.body) theme = themeOfColour(getComputedStyle(document.body).backgroundColor);
+      if (!document.body) return;
+      theme = themeOfColour(getComputedStyle(document.body).backgroundColor);
+      reportTheme(theme);
     },
     create: (postId) => {
       const button = createTagButton(postId, (control) => popover.toggle(control));

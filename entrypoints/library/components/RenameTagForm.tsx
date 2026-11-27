@@ -29,7 +29,7 @@ export function RenameTagForm(props: {
         <input
           ref={input}
           type="text"
-          class="manage__input"
+          class="input"
           defaultValue={props.name}
           maxLength={MAX_TAG_NAME * 2}
           autocomplete="off"
@@ -44,8 +44,10 @@ export function RenameTagForm(props: {
         </p>
       ) : null}
       <div class="manage__buttons">
-        <button type="submit">Save</button>
-        <button type="button" onClick={props.onDone}>
+        <button type="submit" class="button button--small button--primary">
+          Save
+        </button>
+        <button type="button" class="button button--small" onClick={props.onDone}>
           Cancel
         </button>
       </div>

@@ -451,12 +451,12 @@ test('shows images from X without cookies or a referrer, and none once turned of
   }
 
   // Turned off, no image is requested, and that survives a reload.
-  await library.getByRole('checkbox', { name: /Show images from X/ }).uncheck();
+  await library.getByRole('switch', { name: /Show images from X/ }).uncheck();
   await expect(library.locator('img')).toHaveCount(0);
   const before = requests.length;
   await library.reload();
   await expect(library.locator('.post')).toHaveCount(3);
-  await expect(library.getByRole('checkbox', { name: /Show images from X/ })).not.toBeChecked();
+  await expect(library.getByRole('switch', { name: /Show images from X/ })).not.toBeChecked();
   await expect(library.locator('img')).toHaveCount(0);
   await expect(card('Photo and video').getByText('2 attachments')).toBeVisible();
   expect(requests.length).toBe(before);

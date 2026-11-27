@@ -137,7 +137,7 @@ The library is one application shown in two containers:
 - **Full tab** (`library.html`), opened from the toolbar popup or a shortcut. The primary view.
 - **Side panel**, a narrow single-column version docked beside x.com. Chromium only.
 
-> **As first built:** the library predates the look described here and in section 7. Settings sit at the bottom of the sidebar, the controls above the list are plain text and native selects, the card's actions are an "Open on X" link and an inline `⋯` row, a tag's panel opens inside the sidebar, Remove from library asks for confirmation, results are reported beside the button that caused them, and below 720 px the sidebar stacks above the list. Milestone M5, Look and feel (SPEC 17), brings it to this section.
+> **As first built:** the library predates the look described here and in section 7. Settings sit at the bottom of the sidebar, the controls above the list are a loose row of text, selects and buttons, the card's actions are an "Open on X" link and an inline `⋯` row, a tag's panel opens inside the sidebar, Remove from library asks for confirmation, results are reported beside the button that caused them, and below 720 px the sidebar stacks above the list. Since the first part of M5, it already has the colours, type, buttons, icons and styled controls described in section 7, in all three themes. Milestone M5, Look and feel (SPEC 17), brings it to this section.
 
 Full tab layout:
 
@@ -265,7 +265,7 @@ Settings is a page of the library, opened from the gear in its header, with "Bac
 - **Theme.** Match X uses the theme last seen on x.com: Light, Dim or Dark. Until x.com has been visited, it follows the system. System follows the system's light or dark setting. The tag button and popover on x.com always follow X, whatever the library uses.
 - The Danger zone panel has a red-tinted border, and its button is outlined in red. "Delete all data…" opens a dialog that says what goes and what stays: every post, tag and tag assignment, for every X account in this browser; settings stay, so that a choice such as not loading images from X is not undone; nothing on X changes. Its button stays disabled until "delete" is typed, in any case. Cancel has focus first. Afterwards the library shows its empty state, from which a backup can be restored.
 
-> **As first built:** until the Settings page (M5, Look and feel), settings are under Settings at the bottom of the library's sidebar: "Show images from X", "Export library" (JSON backup or CSV), "Import backup", "Backup reminder" and "Delete all data…". There is no theme setting: the library follows the system. The Capture, Library and Shortcuts rows come with M6 and M7. The backup reminder shows in the library only until the popup (M7).
+> **As first built:** until the Settings page (M5, Look and feel), settings are under Settings at the bottom of the library's sidebar: "Show images from X", "Export library" (JSON backup or CSV), "Import backup", "Backup reminder" and "Delete all data…". Theme is a select there, without previews. The Capture, Library and Shortcuts rows come with M6 and M7. The backup reminder shows in the library only until the popup (M7).
 
 ## 5. Key flows
 
@@ -368,16 +368,23 @@ Library tokens. Text colours are given against `bg`; every text pair must meet W
 | `hover` | Hovered rows and buttons | `#f1f3f6` | `#262c36` | `#1b1e23` |
 | `card-hover` | Hovered post card | `#f8f9fb` | `#191c23` | `#0f1114` |
 | `chip` | Tag chips | `#eef0f3` | `#272d37` | `#1c1f25` |
+| `chip-hover` | Hovered chips and their buttons | `#e3e6eb` | `#313845` | `#262a31` |
 | `border` | Dividers | `#e7e9ee` | `#2a303a` | `#1f2228` |
 | `border-strong` | Button and field outlines | `#d3d8df` | `#3b4350` | `#2f343c` |
 | `text` | Body text | `#14161a` | `#e9ecf1` | `#e8e9eb` |
 | `text-2` | Secondary text, counts, handles | `#5a616d` | `#a3abb8` | `#969ca6` |
-| `text-3` | Icons and placeholders only, not text | `#7d8591` | `#7f8896` | `#6f7680` |
+| `text-3` | Icons only, not text, at 3:1 or more. Placeholders use `text-2` | `#7d8591` | `#7f8896` | `#6f7680` |
 | `danger` | Destructive actions | `#c8202b` | `#ff6b6b` | `#ff6b6b` |
+| `danger-soft` | Hovered danger outline button | `#fdecec` | `#312227` | `#231516` |
+| `on-danger` | Text on a danger fill | `#ffffff` | `#15181e` | `#0a0b0d` |
 | `notice-bg` / `notice-text` | Backup reminder | `#fbf5e8` / `#6d4500` | `#2a2418` / `#f0d08f` | `#1f1b12` / `#eacb8a` |
+| `notice-border` | Backup reminder | `#f0e2c0` | `#3d3320` | `#2f2817` |
 | `toast-bg` / `toast-text` | Toasts, the inverse of the page | `#17191d` / `#f3f4f6` | `#eceff3` / `#15181e` | `#e8e9eb` / `#0a0b0d` |
+| `toast-accent` | A toast's action, such as Undo | `#b5b5ed` | `#5050bc` | `#5050bc` |
 
-**Accent.** Indigo, `#5b5bd6`, its own colour and not X's blue. It fills primary buttons, the selected theme, switches and the mark, with white text on it. Derived from it:
+White text on Dim and Dark's lighter red would be 2.8:1, so a danger button there carries the page's own dark colour instead. The scrim behind dialogs is black at 36%, 50% and 60%.
+
+**Accent.** Indigo, `#5b5bd6`, its own colour and not X's blue. It fills primary buttons, the selected theme, switches and the mark, with white text on it, at 5.4:1. Hovered, a primary button darkens to `#5050bc`. Derived from it:
 
 - `accent-ink`, for accent-coloured text and icons: mixed 12% towards black in Light, 42% towards white in Dim and Dark.
 - `accent-soft`, the selected-row tint: 11% of the accent in Light, 24% in Dim and Dark.

@@ -5,7 +5,9 @@ import {
   deleteAllData,
   dismissBackupReminder,
   readSettings,
+  readXTheme,
   recordBackup,
+  recordXTheme,
   updateSettings,
 } from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
@@ -206,14 +208,21 @@ describe('deleteAllData', () => {
     await updateSettings(db, { remoteImages: false });
     await recordBackup(db, ACCOUNT, DAY);
     await db.meta.put({ accountId: ACCOUNT, key: 'captureComplete:bookmark', value: true });
+    await recordXTheme(db, 'dark');
     expect(await deleteAllData(db)).toEqual([ACCOUNT, OTHER]);
     expect(await db.posts.count()).toBe(0);
     expect(await db.tags.count()).toBe(0);
     expect(await db.postTags.count()).toBe(0);
     expect(await db.meta.toArray()).toEqual([
-      { accountId: '', key: 'settings', value: { remoteImages: false, backupReminderDays: 30 } },
+      {
+        accountId: '',
+        key: 'settings',
+        value: { remoteImages: false, backupReminderDays: 30, theme: 'x' },
+      },
     ]);
     expect((await loadCatalogue(db)).account).toBeUndefined();
+    // Until x.com is visited again, Match X follows the system.
+    expect(await readXTheme(db)).toBeUndefined();
   });
 
   it('names an account that has only tags', async () => {

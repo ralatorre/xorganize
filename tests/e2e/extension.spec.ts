@@ -67,8 +67,8 @@ test('library page renders its empty state', async ({ context, extensionId }) =>
   await expect(page.getByRole('heading', { level: 1, name: 'xorganize' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Your library is empty' })).toBeVisible();
   expect(violations).toEqual([]);
-  // The page's own text size, not the smaller one browsers give extension pages.
-  expect(await page.evaluate(() => getComputedStyle(document.body).fontSize)).toBe('16px');
+  // The library's own text size (DESIGN, 7.2), not the smaller one browsers give extension pages.
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontSize)).toBe('14px');
 });
 
 test('the browser blocks network requests from extension pages', async ({
@@ -209,10 +209,19 @@ test('the three parts connect on x.com without the page being able to tell', asy
   const page = await context.newPage();
   await page.goto('https://x.com/home');
 
-  // Page-context script -> isolated content script -> background worker.
+  // Page-context script -> isolated content script -> background worker. The
+  // content script also reports the theme the page shows, for the library
+  // (docs/SPEC.md, section 10). The two race, so their order is not checked.
   await expect
-    .poll(() => serviceWorker.evaluate(recorded))
-    .toEqual([{ type: 'content/ready', url: 'https://x.com/home' }]);
+    .poll(async () =>
+      (await serviceWorker.evaluate(recorded)).sort((a, b) =>
+        String(a.type).localeCompare(String(b.type)),
+      ),
+    )
+    .toEqual([
+      { type: 'content/ready', url: 'https://x.com/home' },
+      { type: 'theme/seen', url: 'https://x.com/home' },
+    ]);
 
   // The page saw nothing: no messages, no events, no listeners, no DOM changes.
   await page.waitForLoadState('load');

@@ -1,4 +1,5 @@
 import type { CapturedLink, CapturedMedia } from '@/src/capture/normalise';
+import type { Theme } from '@/src/dom/theme';
 
 export type PostId = string; // decimal string, larger than a JavaScript number holds
 export type AccountId = string;
@@ -71,12 +72,19 @@ export interface Counts {
   likes: number;
 }
 
+/**
+ * The library's theme: `x` follows the theme last seen on x.com, `system`
+ * the system's light or dark setting, and the rest are fixed.
+ */
+export type ThemeSetting = 'x' | 'system' | Theme;
+
 /** Preferences, kept in the `meta` table so that no `storage` permission is needed. */
 export interface Settings {
   /** Show avatars and media thumbnails, which the browser loads from X's image server. */
   remoteImages: boolean;
   /** Days after the last backup before the library reminds the user to make one. 0: never. */
   backupReminderDays: number;
+  theme: ThemeSetting;
 }
 
 /** When the account's library was last backed up, and what else the backup reminder counts from. */

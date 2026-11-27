@@ -19,7 +19,7 @@ export function BackupReminder(props: {
       </p>
       <button
         type="button"
-        class="export__format"
+        class="button button--small"
         disabled={busy}
         onClick={() => {
           setBusy(true);
@@ -31,7 +31,12 @@ export function BackupReminder(props: {
       >
         Back up now
       </button>
-      <button type="button" class="export__format" disabled={busy} onClick={props.onLater}>
+      <button
+        type="button"
+        class="button button--small button--quiet"
+        disabled={busy}
+        onClick={props.onLater}
+      >
         Remind me later
       </button>
     </aside>

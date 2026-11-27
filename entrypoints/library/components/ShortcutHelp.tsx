@@ -16,7 +16,7 @@ export function ShortcutHelp({ onClose }: { onClose(): void }) {
         ))}
       </dl>
       <div class="modal__buttons">
-        <button type="button" class="button" autofocus onClick={onClose}>
+        <button type="button" class="button button--primary" autofocus onClick={onClose}>
           Close
         </button>
       </div>

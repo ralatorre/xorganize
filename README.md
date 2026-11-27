@@ -64,7 +64,7 @@ To remove everything these commands created: `podman volume rm xorganize-node-mo
 
 ## Licence
 
-[MIT](LICENSE)
+[MIT](LICENSE). The library's font, Inter, is packaged unmodified under the SIL Open Font License: see [public/fonts/LICENSE-Inter.txt](public/fonts/LICENSE-Inter.txt).
 
 ## Not affiliated
 

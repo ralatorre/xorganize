@@ -5,8 +5,17 @@
 import Dexie from 'dexie';
 import type { CapturedPost } from '@/src/capture/normalise';
 import type { SourceKind } from '@/src/capture/operations';
+import { isTheme, type Theme } from '@/src/dom/theme';
 import type { LibraryDatabase } from './schema';
-import type { AccountId, BackupTimes, Counts, PostId, Settings, StoredPost } from './types';
+import type {
+  AccountId,
+  BackupTimes,
+  Counts,
+  PostId,
+  Settings,
+  StoredPost,
+  ThemeSetting,
+} from './types';
 
 export interface CaptureBatch {
   accountId: AccountId;
@@ -24,11 +33,19 @@ const ACTIVE_ACCOUNT = 'activeAccount';
 const SETTINGS = 'settings';
 const LAST_BACKUP = 'lastBackupAt';
 const REMINDER_DISMISSED = 'backupReminderDismissedAt';
+const X_THEME = 'xTheme';
 
 /** How often the backup reminder can be set to come back, in days. 0 turns it off. */
 export const BACKUP_REMINDER_DAYS = [7, 30, 90, 0] as const;
 
-export const DEFAULT_SETTINGS: Readonly<Settings> = { remoteImages: true, backupReminderDays: 30 };
+/** The library's theme choices, in the order Settings offers them. */
+export const THEME_SETTINGS: readonly ThemeSetting[] = ['x', 'system', 'light', 'dim', 'dark'];
+
+export const DEFAULT_SETTINGS: Readonly<Settings> = {
+  remoteImages: true,
+  backupReminderDays: 30,
+  theme: 'x',
+};
 const SORT_WIDTH = 30;
 
 /**
@@ -353,12 +370,17 @@ export async function activeAccount(db: LibraryDatabase): Promise<AccountId | un
 export async function readSettings(db: LibraryDatabase): Promise<Settings> {
   const row = await db.meta.get(['', SETTINGS]);
   const stored = typeof row?.value === 'object' && row.value !== null ? row.value : {};
-  const { remoteImages, backupReminderDays } = stored as Partial<Record<keyof Settings, unknown>>;
+  const { remoteImages, backupReminderDays, theme } = stored as Partial<
+    Record<keyof Settings, unknown>
+  >;
   return {
     remoteImages: typeof remoteImages === 'boolean' ? remoteImages : DEFAULT_SETTINGS.remoteImages,
     backupReminderDays: (BACKUP_REMINDER_DAYS as readonly unknown[]).includes(backupReminderDays)
       ? (backupReminderDays as number)
       : DEFAULT_SETTINGS.backupReminderDays,
+    theme: (THEME_SETTINGS as readonly unknown[]).includes(theme)
+      ? (theme as ThemeSetting)
+      : DEFAULT_SETTINGS.theme,
   };
 }
 
@@ -368,6 +390,23 @@ export function updateSettings(db: LibraryDatabase, changes: Partial<Settings>):
     await db.meta.put({ accountId: '', key: SETTINGS, value: settings });
     return settings;
   });
+}
+
+/**
+ * Records the theme x.com shows, for the library's Match X. Written only
+ * when it changed, so that an open library does not re-read for nothing.
+ */
+export function recordXTheme(db: LibraryDatabase, theme: Theme): Promise<void> {
+  return db.transaction('rw', db.meta, async () => {
+    if ((await readXTheme(db)) !== theme)
+      await db.meta.put({ accountId: '', key: X_THEME, value: theme });
+  });
+}
+
+/** The theme last seen on x.com, if x.com has been visited since the last Delete all data. */
+export async function readXTheme(db: LibraryDatabase): Promise<Theme | undefined> {
+  const row = await db.meta.get(['', X_THEME]);
+  return isTheme(row?.value) ? row.value : undefined;
 }
 
 /** Records a whole-library JSON export: the backup the reminder counts from. */

@@ -1,5 +1,6 @@
 import type { TagSummary } from '@/src/db/types';
 import { TagDot } from '@/src/ui/TagDot';
+import { Icon } from './Icon';
 
 /** A tag's name and colour. With `onRemove`, a button to take it away. */
 export function TagChip(props: { tag: TagSummary; removeLabel?: string; onRemove?(): void }) {
@@ -15,7 +16,7 @@ export function TagChip(props: { tag: TagSummary; removeLabel?: string; onRemove
           aria-label={props.removeLabel ?? `Remove ${tag.name}`}
           onClick={onRemove}
         >
-          ×
+          <Icon name="close" size="tiny" />
         </button>
       ) : null}
     </span>

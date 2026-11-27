@@ -59,10 +59,10 @@ export function Diagnostics(props: {
         and likes, then save the report.
       </p>
       <div class="diagnostics__actions">
-        <button type="button" onClick={download} disabled={operations.length === 0}>
+        <button type="button" class="button" onClick={download} disabled={operations.length === 0}>
           Save report
         </button>
-        <button type="button" onClick={clear} disabled={operations.length === 0}>
+        <button type="button" class="button" onClick={clear} disabled={operations.length === 0}>
           Clear
         </button>
       </div>

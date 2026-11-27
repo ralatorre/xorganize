@@ -1,5 +1,6 @@
 import type { Ref } from 'preact';
 import { MAX_QUERY } from '@/src/search/query';
+import { Icon } from './Icon';
 
 /** The search box. What it accepts is explained by its placeholder (DESIGN, 4.5). */
 export function SearchBox(props: {
@@ -9,6 +10,7 @@ export function SearchBox(props: {
 }) {
   return (
     <div class="search" role="search">
+      <Icon name="search" />
       <input
         ref={props.inputRef}
         class="search__input"

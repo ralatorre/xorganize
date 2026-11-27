@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalisePost, type CapturedPost } from '@/src/capture/normalise';
 import {
   activeAccount,
@@ -7,7 +7,9 @@ import {
   counts,
   mergePost,
   readSettings,
+  readXTheme,
   recentKey,
+  recordXTheme,
   saveCapture,
   sortKey,
   sourceIds,
@@ -16,6 +18,7 @@ import {
   type CaptureBatch,
 } from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
+import type { Settings } from '@/src/db/types';
 import { rawPost, type RawPostOptions } from '../fixtures/posts';
 
 const ACCOUNT = '9000000000000000001';
@@ -444,13 +447,24 @@ describe('the order of a source', () => {
 });
 
 describe('settings', () => {
+  const DEFAULTS: Settings = { remoteImages: true, backupReminderDays: 30, theme: 'x' };
+
   it('show images from X unless turned off', async () => {
-    expect(await readSettings(db)).toEqual({ remoteImages: true, backupReminderDays: 30 });
+    expect(await readSettings(db)).toEqual(DEFAULTS);
     expect(await updateSettings(db, { remoteImages: false })).toEqual({
+      ...DEFAULTS,
       remoteImages: false,
-      backupReminderDays: 30,
     });
-    expect(await readSettings(db)).toEqual({ remoteImages: false, backupReminderDays: 30 });
+    expect(await readSettings(db)).toEqual({ ...DEFAULTS, remoteImages: false });
+  });
+
+  it('match X’s theme unless set to one of the other choices', async () => {
+    for (const theme of ['system', 'light', 'dim', 'dark', 'x'] as const) {
+      expect(await updateSettings(db, { theme })).toMatchObject({ theme });
+      expect((await readSettings(db)).theme).toBe(theme);
+    }
+    await db.meta.put({ accountId: '', key: 'settings', value: { theme: 'sepia' } });
+    expect((await readSettings(db)).theme).toBe('x');
   });
 
   it('remind of backups every 30 days unless set to one of the other choices', async () => {
@@ -468,10 +482,37 @@ describe('settings', () => {
     await db.meta.put({
       accountId: '',
       key: 'settings',
-      value: { remoteImages: 'no', backupReminderDays: '7' },
+      value: { remoteImages: 'no', backupReminderDays: '7', theme: 1 },
     });
-    expect(await readSettings(db)).toEqual({ remoteImages: true, backupReminderDays: 30 });
+    expect(await readSettings(db)).toEqual(DEFAULTS);
     await db.meta.put({ accountId: '', key: 'settings', value: 'garbage' });
-    expect(await readSettings(db)).toEqual({ remoteImages: true, backupReminderDays: 30 });
+    expect(await readSettings(db)).toEqual(DEFAULTS);
+  });
+});
+
+describe('the theme seen on x.com', () => {
+  it('is unknown until recorded, then the last one recorded', async () => {
+    expect(await readXTheme(db)).toBeUndefined();
+    await recordXTheme(db, 'dim');
+    expect(await readXTheme(db)).toBe('dim');
+    await recordXTheme(db, 'light');
+    expect(await readXTheme(db)).toBe('light');
+  });
+
+  it('is written only when it changed, so an open library does not re-read for nothing', async () => {
+    await recordXTheme(db, 'dark');
+    const put = vi.spyOn(db.meta, 'put');
+    await recordXTheme(db, 'dark');
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('ignores a stored value that is not one of X’s themes', async () => {
+    await db.meta.put({ accountId: '', key: 'xTheme', value: 'sepia' });
+    expect(await readXTheme(db)).toBeUndefined();
+  });
+
+  it('is not a setting', async () => {
+    await recordXTheme(db, 'dim');
+    expect((await readSettings(db)).theme).toBe('x');
   });
 });

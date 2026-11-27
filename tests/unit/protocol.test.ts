@@ -34,6 +34,17 @@ describe('runtime messages', () => {
       expect(isRuntimeMessage(value)).toBe(false);
     },
   );
+
+  it.each(['light', 'dim', 'dark'])('accepts the theme seen on x.com: %s', (theme) => {
+    expect(isRuntimeMessage({ type: 'theme/seen', theme })).toBe(true);
+  });
+
+  it.each([undefined, 'sepia', 'Dark', 1, { theme: 'dark' }])(
+    'rejects a theme that is not one of X’s: %j',
+    (theme) => {
+      expect(isRuntimeMessage({ type: 'theme/seen', theme })).toBe(false);
+    },
+  );
 });
 
 describe('response messages', () => {
