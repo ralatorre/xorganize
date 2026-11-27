@@ -1,6 +1,7 @@
 /**
- * Tells the worker which theme x.com shows, for the library's Match X: once
- * when it is first read, and again only when it changes.
+ * Passes on which theme x.com shows once when it is first read, and again
+ * only when it changes: the tag buttons take it, and the worker is told, for
+ * the library's Match X.
  */
 
 import type { Theme } from '@/src/dom/theme';

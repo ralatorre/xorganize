@@ -98,10 +98,10 @@ test('matches the theme last seen on x.com, live, unless another is chosen', asy
   await expect(theme(library)).toHaveAttribute('data-theme', 'dim');
   expect(await background(library)).toBe('rgb(21, 24, 30)');
 
-  // X switches to its dark theme while the library is open.
+  // X switches to its dark theme while the library is open. Like X's display
+  // settings, this only restyles the body: nothing is added to the page.
   await site.evaluate(() => {
     document.body.style.background = 'rgb(0, 0, 0)';
-    document.body.append(document.createElement('div'));
   });
   await expect(theme(library)).toHaveAttribute('data-theme', 'dark');
 
