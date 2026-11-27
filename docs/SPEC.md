@@ -23,7 +23,8 @@ The extension makes no network requests of its own, loads no remote code, and ha
 | Extension framework | WXT | Vite-based, MV3-first, builds for Chromium and Firefox from one codebase, file-based entrypoints. |
 | Language | TypeScript, `strict` | |
 | UI | Preact + Signals | Small bundle, which matters for a content script injected on every x.com page. |
-| Styling | Plain CSS with custom properties, in a shadow root | No runtime styling cost, full isolation from X's CSS. |
+| Styling | Plain CSS with custom properties. On x.com in a shadow root with X's tokens; in the library one token set per theme (DESIGN 7) | No runtime styling cost, full isolation from X's CSS. |
+| Font | Inter, packaged with the extension (SIL Open Font License) | The library looks the same on every system, with no network request. Injected UI on x.com uses X's own font. |
 | Storage | IndexedDB through Dexie 4 | Compound indexes, migrations, cross-context live queries. |
 | Validation | Hand-written type guards, with size caps | Enough for the messages that exist today. A schema library (Valibot) is to be added when importing files needs it (M4). |
 | Search | Our own substring index, in a web worker | No dependency. A search narrows the chosen view rather than ranking results, so a full-text library's tokenising and scoring would go unused. Its word splitting would also miss languages written without spaces. Measured at 50,000 posts: 1.3 s to read the library in the worker, then a few milliseconds per search (11). |
@@ -185,7 +186,7 @@ Rule for changes: a new permission, host, or manifest key needs its reason added
 The policy applies to every extension page and to the background worker.
 
 - `connect-src 'none'`: the browser refuses any network request from extension code. "Nothing leaves the device" is enforced by the browser, not only promised by the code. The library's search worker runs under the same policy, and a test confirms it.
-- `default-src 'none'` with `'self'` for scripts, styles, images and fonts: only files packaged with the extension can load. No remote code, no inline script, no `eval`.
+- `default-src 'none'` with `'self'` for scripts, styles, images and fonts: only files packaged with the extension can load, the library's font among them. No remote code, no inline script, no `eval`.
 - `img-src` also allows `https://pbs.twimg.com`, X's image server, and nothing else. See below.
 - `base-uri`, `form-action`, `frame-ancestors` are `'none'`: pages cannot be re-based, cannot submit forms anywhere, and cannot be framed.
 
@@ -363,7 +364,7 @@ The rest of this section describes the design. Where it differs from what is bui
 - **Tag state for visible posts.** The content script asks the service worker for the tags of visible post IDs in one batched request, and subscribes to changes so that edits in the library or another tab are reflected.
 - **Popover.** A single instance per tab, portalled to a shadow root on `document.body`, positioned with a small in-house routine (flip and shift only).
 - **Navigation.** x.com is a single-page application. Route changes are detected through WXT's location-change event, and the capture banner is mounted or removed accordingly.
-- **Theme.** Tokens are chosen from the computed background colour of `body`, re-evaluated when its `style` attribute changes.
+- **Theme.** Tokens are chosen from the computed background colour of `body`, re-evaluated when its `style` attribute changes. The theme is also sent to the worker when first read and whenever it changes (`theme/seen`, 10), so the library can match it (9.3).
 - **Failure.** If the action bar cannot be found for a post, that post is skipped. After repeated failures across a session, the content script reports `inline-ui-degraded` to the service worker, which surfaces it in the popup.
 
 All selectors live in `src/dom/selectors.ts` so that a layout change is a one-file fix.
@@ -476,7 +477,7 @@ Rules:
 
 ### 9.3 Settings
 
-Stored as one `settings` row in the `meta` table of the same IndexedDB database, validated on read, with defaults applied for missing fields or values of the wrong type (`readSettings` in `repo.ts`). The settings are `remoteImages` (6.2) and `backupReminderDays` (7, 30, 90, or 0 for never; 30 by default; any other value reads as the default). This avoids the `storage` permission altogether. Content scripts cannot open the database, so they receive settings from the service worker over the messaging port. Nothing is synced, so nothing leaves the device.
+Stored as one `settings` row in the `meta` table of the same IndexedDB database, validated on read, with defaults applied for missing fields or values of the wrong type (`readSettings` in `repo.ts`). The settings are `remoteImages` (6.2), `backupReminderDays` (7, 30, 90, or 0 for never; 30 by default; any other value reads as the default) and, from M5, `theme` (`x`, `system`, `light`, `dim` or `dark`; `x`, Match X, by default; any other value reads as the default). The theme last seen on x.com is not a setting: the worker keeps it as the `['', 'xTheme']` row of `meta` (`light`, `dim` or `dark`; anything else is ignored), from `theme/seen` (10). Delete all data removes it with the other rows, and the library then follows the system until x.com is visited again. This avoids the `storage` permission altogether. Content scripts cannot open the database, so they receive settings from the service worker over the messaging port. Nothing is synced, so nothing leaves the device.
 
 ## 10. Messaging
 
@@ -490,6 +491,7 @@ Content scripts talk to the service worker over `runtime.sendMessage` for reques
 | `tags/suggest` | content → worker | **Built.** Autocomplete: the typed text and a limit of up to 20. Names that start with the text come first, then names that contain it, each by use count. The reply also carries the five most recently used tags. |
 | `tags/set` | content → worker | **Built.** Adds tags by name and removes them by ID on one post, up to 20 of each, creating tags as needed. Carries the post record when the page has it, so that a post not yet stored can be. The reply carries the post's tags afterwards. |
 | `health/report` | content → worker | `capture-degraded` or `inline-ui-degraded`. |
+| `theme/seen` | content → worker | From M5. The theme x.com shows, `light`, `dim` or `dark`, and nothing else. Sent when the content script first reads it and when it changes. The worker stores it as `xTheme` (9.3). |
 | `tags/changed` | worker → content (port) | **Built.** After every successful `tags/set`, sent to every open `tags` port: account, post ID and its tags. A content script ignores changes for an account other than its own. |
 | `tags/edited` | library → worker (channel) | **Built.** After every tag or post change made in the library, on the `xorganize-tags` `BroadcastChannel`. Carries only the account. |
 | `tags/refresh` | worker → content (port) | **Built.** Passed on from `tags/edited` to every open `tags` port. A content script for that account asks again for the tags of every post it shows. |
@@ -526,6 +528,16 @@ The worker checks `sender.id`, that the message comes from the top frame, and th
 - **Import** (built). Under Settings, "Import backup" picks a JSON file; an empty library offers "Restore from a backup" instead. The file is checked, previewed, then merged or replaces the library (12.3).
 - **Backup reminder** (built, `src/library/backup-reminder.ts`). Only a whole-library JSON export counts as a backup, since nothing else can restore the library. `createLibraryExport` (`src/library/exporter.ts`) records its time as the account's `lastBackupAt` in `meta`, once the file has been handed to the browser. "Remind me later" records `backupReminderDismissedAt`. The reminder is due once `backupReminderDays` have passed since the latest of those two and of the oldest post's `savedAt`, so a new library is not asked for a backup on its first day. It is read with the catalogue, so it goes as soon as a backup is recorded.
 - **Delete all data** (built, `deleteAllData` in `repo.ts`). Under Settings, after the word "delete" is typed. In one transaction it clears posts, tags and tag assignments for every account, and every `meta` row but the settings, so that a choice such as not loading images from X survives. The accounts that had data are announced to the worker (10), so open x.com tabs drop their tags. Nothing on X changes.
+- **Look and feel** (M5, planned; DESIGN 4.5, 4.7 and 7). What each part needs:
+  - **Tokens.** One set per theme as custom properties under `:root[data-theme=…]`, in the library's stylesheet. The page sets `data-theme` from a pure `themeFor(setting, xTheme, systemDark)`: Match X uses `xTheme`, else the system; System uses `prefers-color-scheme`. Each branch has a unit test. Another unit test checks every text token against its background in each theme for 4.5:1.
+  - **Font.** Inter's variable woff2, Latin and Latin Extended only, under `public/fonts/` with its licence, taken from the official release with its checksum in the pull request. `@font-face` loads it from `'self'`, so the policy (6.2) is unchanged.
+  - **Icons.** Path data in one module, drawn by one `Icon` component. No icon package.
+  - **The popover in the library** takes the library's tokens instead of X's (`THEME_TOKENS` in `src/ui/styles.ts` becomes one of two sets). Its placement takes an alignment: the end of the button on x.com, as X's menus sit, and the start in the library (`placePopover` in `src/inline/position.ts`). Opening from the end in the library is the bug that puts it over the sidebar today, so that change starts with a failing test.
+  - **Settings** is a view of the library page at `#settings`, so Back returns to the list. No new entrypoint and no manifest change.
+  - **Menus.** One component, a button and its list: Esc and a click outside close it, and focus returns to the button. The account, sort, export, card and tag menus use it.
+  - **Toasts.** One region with `role="status"`. `TOAST_MS = 5000`. A new toast replaces the shown one. The state is a pure reducer.
+  - **Undo.** `removePost` returns what it removed: the post and its tag assignments. `restorePost` puts them back in one transaction, skipping assignments whose tag was deleted meanwhile, and the account is announced as for any edit (10). Undo is offered while the toast shows.
+  - **Narrow layout.** Below 720 px, the same components rearranged: source pills and a bottom sheet for tags. The side panel (M7) uses the same layout.
 - **Sharing code.** The side panel imports the same app with a `compact` flag. The tag popover is shared with the injected UI (`src/ui/`).
 
 ## 12. Import and export
@@ -672,10 +684,11 @@ The repository is public, so the following never get committed:
 | M0 Skeleton | WXT project, both content scripts, service worker, empty library page, CI. | The extension loads and CI is green. |
 | M1 Capture | Interceptor, bridge, extraction, normalisation, database, account detection, capture banner without auto-scroll, for both the Bookmarks and Likes timelines. Verify every assumption in section 18. | Scrolling the Bookmarks page and the Likes tab fills the database, confirmed against a real free account. |
 | M2 Tagging | Tag button, popover, seen cache, DOM fallback, tag messages. **Built.** Confirmed against a real account on 2026-11-25, Alt+T with `j`/`k` focus after a fix (18.1, 14). | A post can be tagged from any timeline and the state survives a reload. |
-| M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. Avatars and thumbnails were brought forward and are done. **Browsing built**: sources, tag sidebar with groups, tag filters, sort, tag chips and quoted posts on cards, virtualised list. **Search built**: text, `#tag` and `@handle`, the `/` shortcut. **Tag management built**: rename, recolour, merge and delete, the card's `[+]` and `⋯` menu, the `j`/`k`/`t`/`o`/`?` shortcuts. The `x` shortcut comes with bulk actions in M6. | A tagged post can be found by tag and by text. |
+| M3 Library | Sources, tag sidebar, post cards, virtualised list, search, tag management. Avatars and thumbnails were brought forward and are done. **Browsing built**: sources, tag sidebar with groups, tag filters, sort, tag chips and quoted posts on cards, virtualised list. **Search built**: text, `#tag` and `@handle`, the `/` shortcut. **Tag management built**: rename, recolour, merge and delete, the card's `[+]` and `⋯` menu, the `j`/`k`/`t`/`o`/`?` shortcuts. The `x` shortcut comes with bulk actions in M7. | A tagged post can be found by tag and by text. |
 | M4 Export | JSON and CSV export for the whole library and the current view, import with merge and replace, backup reminder, delete all. **Export built**: JSON and CSV, for the whole library and the view. **Import built**: JSON, checked in full, previewed, merged or replacing the library. **Backup reminder and delete all built.** M4 is complete. | Export then import into a clean profile reproduces the library, and a single tag can be exported to CSV. |
-| M5 Live capture | Bookmark and like mutations, tag prompt toast, auto-scroll. | Bookmarking or liking a post anywhere adds it without visiting the Bookmarks or Likes page. |
-| M6 Release | Side panel, popup, settings, welcome page, bulk actions, accessibility pass, Firefox build, store listing. | Published to the Chrome Web Store and Firefox Add-ons. |
+| M5 Look and feel | The library's own look (DESIGN 4.5, 4.7, 7; 11), in five pull requests. **1. Foundations:** tokens for Light, Dim and Dark; the `theme` setting with Match X (9.3, `theme/seen`); the packaged font; buttons, icons and styled form controls. No layout change. **2. Structure:** the header bar with the account menu, `?` and the gear; the Settings page; a sidebar of sources and tags only; the 720 px list column; the narrow layout with the filter sheet. **3. Post cards:** source marks, the X-style media frame, the footer with chips and the tag button, actions on hover and focus, the `⋯` menu, Remove with Undo; the popover's start alignment and library tokens. **4. Toolbar and states:** one toolbar with Sort and Export menus, the filters row with All tags / Any tag, the reminder bar, the empty library, No posts match, and one toast region. **5. Sidebar:** the tag menu, dimmed unused tags, groups that filter, counts in one column. | The library matches DESIGN 4.5, 4.7 and 7 in Light, Dim and Dark, at full width and at 390 px, and every existing browser test still passes. |
+| M6 Live capture | Bookmark and like mutations, tag prompt toast, auto-scroll. | Bookmarking or liking a post anywhere adds it without visiting the Bookmarks or Likes page. |
+| M7 Release | Side panel, popup, the remaining settings, welcome page, bulk actions, accessibility pass, Firefox build, store listing. | Published to the Chrome Web Store and Firefox Add-ons. |
 
 Later candidates: Markdown export, optional encrypted sync, saved searches, Firefox for Android.
 
