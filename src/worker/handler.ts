@@ -7,6 +7,7 @@
 import { DIAGNOSTICS } from '@/src/build';
 import type { TagChange } from '@/src/db/tags';
 import type { Counts, TagSuggestion, TagSummary } from '@/src/db/types';
+import type { Theme } from '@/src/dom/theme';
 import type { EnvironmentObservation } from '@/src/diagnostics/environment';
 import type { OperationObservation } from '@/src/diagnostics/observe';
 import { isSupportedUrl } from '@/src/hosts';
@@ -60,6 +61,8 @@ export interface WorkerDependencies {
   extensionId: string;
   store: CaptureStore;
   tags: TagStore;
+  /** Keeps the theme x.com shows, for the library's Match X. */
+  recordTheme(theme: Theme): Promise<unknown>;
   /** Tells every listening page that a post's tags changed. */
   notify(message: TagsChangedMessage): void;
   /** Present only in the diagnostics build. Without it, diagnostics messages are ignored. */
@@ -83,6 +86,13 @@ export function createWorkerHandler(deps: WorkerDependencies) {
     if (!isTrustedSender(sender, deps.extensionId) || !isRuntimeMessage(message)) return undefined;
 
     if (message.type === 'content/ready') return Promise.resolve({ ok: true });
+
+    if (message.type === 'theme/seen') {
+      return deps.recordTheme(message.theme).then(
+        () => ({ ok: true }),
+        () => ({ ok: false }),
+      );
+    }
 
     if (message.type === 'capture/posts' || message.type === 'capture/clear') {
       const stored =

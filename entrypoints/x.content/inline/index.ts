@@ -4,12 +4,13 @@
  */
 
 import type { CapturedPost } from '@/src/capture/normalise';
-import { themeOfColour, type Theme } from '@/src/dom/theme';
+import type { Theme } from '@/src/dom/theme';
 import { createKeyboardGuard, contain } from '@/src/inline/keyboard-guard';
 import { POPOVER_SUGGESTIONS } from '@/src/inline/popover-model';
 import { isShortcutPress, matchesShortcut, postAnchor } from '@/src/inline/shortcut';
 import { createTagState } from '@/src/inline/tag-state';
 import { createTagger } from '@/src/inline/tagger';
+import { createThemeReport } from '@/src/inline/theme-report';
 import { createTagsListener, type ListeningPort } from '@/src/inline/tags-port';
 import { SELECTORS } from '@/src/dom/selectors';
 import {
@@ -22,6 +23,7 @@ import {
 import { createPopover } from '@/src/ui/popover';
 import { startMounter } from './mounter';
 import { createTagButton, type TagButton } from './tag-button';
+import { watchTheme } from './theme-watcher';
 
 export interface InlineTaggingDependencies {
   send<Reply>(message: RuntimeMessage): Promise<Reply | undefined>;
@@ -38,6 +40,15 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
   const buttons = new Map<string, Set<TagButton>>();
   const unwatch = new Map<TagButton, () => void>();
   let theme: Theme = 'light';
+  // Only a change is acted on: buttons on the page take it, and the worker is told.
+  const checkTheme = watchTheme(
+    document,
+    createThemeReport((seen) => {
+      theme = seen;
+      for (const group of buttons.values()) for (const button of group) button.setTheme(seen);
+      void deps.send({ type: 'theme/seen', theme: seen });
+    }),
+  );
 
   const withAccount = <Message extends RuntimeMessage>(build: (accountId: string) => Message) => {
     const accountId = deps.accountId();
@@ -101,9 +112,7 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
 
   startMounter<TagButton>({
     enabled: () => deps.accountId() !== undefined,
-    beforeCheck: () => {
-      if (document.body) theme = themeOfColour(getComputedStyle(document.body).backgroundColor);
-    },
+    beforeCheck: checkTheme,
     create: (postId) => {
       const button = createTagButton(postId, (control) => popover.toggle(control));
       // Keys on the button stay from the page, but Alt+T still works there.

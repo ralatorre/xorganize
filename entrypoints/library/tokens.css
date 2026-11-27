@@ -1,0 +1,113 @@
+/*
+ * The library's colour tokens, one set per theme (DESIGN, 7.1). The page sets
+ * `data-theme` on the root element before anything is drawn. Every value is
+ * a hex colour unless it is a shadow or a scrim, so that
+ * tests/unit/tokens.test.ts can check each text colour against the
+ * backgrounds it is used on.
+ *
+ * Derived from the accent, #5b5bd6: `accent-ink` is mixed 12% towards black
+ * in Light and 42% towards white in Dim and Dark; `accent-soft` is 11% of the
+ * accent over `bg` in Light and 24% in Dim and Dark.
+ */
+
+:root {
+  --accent: #5b5bd6;
+  --accent-hover: #5050bc;
+  --on-accent: #ffffff;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --field: #f2f4f7;
+  --hover: #f1f3f6;
+  --card-hover: #f8f9fb;
+  --chip: #eef0f3;
+  --chip-hover: #e3e6eb;
+  --border: #e7e9ee;
+  --border-strong: #d3d8df;
+  --text: #14161a;
+  --text-2: #5a616d;
+  --text-3: #7d8591;
+  --accent-ink: #5050bc;
+  --accent-soft: #ededfa;
+  --danger: #c8202b;
+  --danger-hover: #b01c26;
+  --danger-soft: #fdecec;
+  --on-danger: #ffffff;
+  --notice-bg: #fbf5e8;
+  --notice-border: #f0e2c0;
+  --notice-text: #6d4500;
+  --toast-bg: #17191d;
+  --toast-text: #f3f4f6;
+  --toast-accent: #b5b5ed;
+  --scrim: rgb(15 17 21 / 0.36);
+  --shadow-small: 0 1px 2px rgb(16 24 40 / 0.08);
+  --shadow-large: 0 16px 40px -12px rgb(16 24 40 / 0.22), 0 2px 6px rgb(16 24 40 / 0.06);
+}
+
+:root[data-theme='dim'] {
+  color-scheme: dark;
+  --bg: #15181e;
+  --surface: #1b1f26;
+  --raised: #222731;
+  --field: #20252d;
+  --hover: #262c36;
+  --card-hover: #191c23;
+  --chip: #272d37;
+  --chip-hover: #313845;
+  --border: #2a303a;
+  --border-strong: #3b4350;
+  --text: #e9ecf1;
+  --text-2: #a3abb8;
+  --text-3: #7f8896;
+  --accent-ink: #a0a0e7;
+  --accent-soft: #26284a;
+  --danger: #ff6b6b;
+  --danger-hover: #ff8585;
+  --danger-soft: #312227;
+  --on-danger: #15181e;
+  --notice-bg: #2a2418;
+  --notice-border: #3d3320;
+  --notice-text: #f0d08f;
+  --toast-bg: #eceff3;
+  --toast-text: #15181e;
+  --toast-accent: #5050bc;
+  --scrim: rgb(0 0 0 / 0.5);
+  --shadow-small: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-large: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.03);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0a0b0d;
+  --surface: #111317;
+  --raised: #17191e;
+  --field: #15171b;
+  --hover: #1b1e23;
+  --card-hover: #0f1114;
+  --chip: #1c1f25;
+  --chip-hover: #262a31;
+  --border: #1f2228;
+  --border-strong: #2f343c;
+  --text: #e8e9eb;
+  --text-2: #969ca6;
+  --text-3: #6f7680;
+  --accent-ink: #a0a0e7;
+  --accent-soft: #1d1e3d;
+  --danger: #ff6b6b;
+  --danger-hover: #ff8585;
+  --danger-soft: #231516;
+  --on-danger: #0a0b0d;
+  --notice-bg: #1f1b12;
+  --notice-border: #2f2817;
+  --notice-text: #eacb8a;
+  --toast-bg: #e8e9eb;
+  --toast-text: #0a0b0d;
+  --toast-accent: #5050bc;
+  --scrim: rgb(0 0 0 / 0.6);
+  --shadow-small: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-large: 0 16px 40px -12px rgb(0 0 0 / 0.8), 0 0 0 1px rgb(255 255 255 / 0.04);
+}

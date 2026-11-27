@@ -33,7 +33,7 @@ export function ColourPicker(props: {
         ))}
       </fieldset>
       <div class="manage__buttons">
-        <button type="button" onClick={props.onDone}>
+        <button type="button" class="button button--small" onClick={props.onDone}>
           Done
         </button>
       </div>

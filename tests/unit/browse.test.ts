@@ -1,7 +1,14 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { normalisePost } from '@/src/capture/normalise';
-import { authorsOf, saveCapture, savedIds, taggedIds, updateSettings } from '@/src/db/repo';
+import {
+  authorsOf,
+  recordXTheme,
+  saveCapture,
+  savedIds,
+  taggedIds,
+  updateSettings,
+} from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
 import { setPostTags, tagIndex } from '@/src/db/tags';
 import type { TagSuggestion } from '@/src/db/types';
@@ -333,9 +340,16 @@ describe('reading the library', () => {
     await updateSettings(db, { remoteImages: false });
     expect(await loadCatalogue(db)).toEqual({
       ...EMPTY_CATALOGUE,
-      settings: { remoteImages: false, backupReminderDays: 30 },
+      settings: { remoteImages: false, backupReminderDays: 30, theme: 'x' },
     });
     expect((await loadBrowse(DEFAULT_VIEW)).ids).toEqual([]);
+  });
+
+  it('carries the theme last seen on x.com, with or without an account', async () => {
+    await recordXTheme(db, 'dim');
+    expect((await loadCatalogue(db)).xTheme).toBe('dim');
+    await sample();
+    expect((await loadCatalogue(db)).xTheme).toBe('dim');
   });
 
   it('counts sources and tags, and lists every post newest in the library first', async () => {
@@ -349,7 +363,7 @@ describe('reading the library', () => {
     ]);
     expect(browse.ids).toEqual(['31', '21', '13', '12', '11']);
     expect(browse.selected).toEqual([]);
-    expect(browse.settings).toEqual({ remoteImages: true, backupReminderDays: 30 });
+    expect(browse.settings).toEqual({ remoteImages: true, backupReminderDays: 30, theme: 'x' });
   });
 
   it('keeps each timeline in its own order', async () => {

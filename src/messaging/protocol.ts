@@ -17,6 +17,7 @@ import { DIAGNOSTICS } from '@/src/build';
 import { isCapturedPost, type CapturedPost } from '@/src/capture/normalise';
 import type { SourceKind } from '@/src/capture/operations';
 import type { Counts, TagSuggestion, TagSummary } from '@/src/db/types';
+import { isTheme, type Theme } from '@/src/dom/theme';
 import { isId, isRecord } from '@/src/guards';
 import { MAX_TAG_NAME, parseTagName } from '@/src/tags/names';
 
@@ -121,6 +122,12 @@ export interface CaptureClearMessage {
 
 export type CaptureMessage = CapturePostsMessage | CaptureClearMessage;
 
+/** The theme x.com shows, for the library's Match X. Sent when first read and when it changes. */
+export interface ThemeSeenMessage {
+  type: 'theme/seen';
+  theme: Theme;
+}
+
 /** The worker's answer to a capture message: the account's totals afterwards. */
 export type CaptureReply = { ok: true; counts: Counts } | { ok: false };
 
@@ -203,7 +210,8 @@ export function isTagsEditedNotice(value: unknown): value is TagsEditedNotice {
   return isRecord(value) && value.type === 'tags/edited' && isId(value.accountId);
 }
 
-export type RuntimeMessage = ContentReadyMessage | CaptureMessage | TagMessage | DiagnosticsMessage;
+export type RuntimeMessage =
+  ContentReadyMessage | CaptureMessage | ThemeSeenMessage | TagMessage | DiagnosticsMessage;
 
 export const MAX_ITEMS = 200;
 /** Posts per tags/for-posts request: more than a screen holds. */
@@ -220,6 +228,7 @@ const isSource = (value: unknown): value is SourceKind => value === 'bookmark' |
 export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
   if (!isRecord(value)) return false;
   if (value.type === 'content/ready') return true;
+  if (value.type === 'theme/seen') return isTheme(value.theme);
   if (value.type === 'capture/clear') {
     return isId(value.accountId) && isSource(value.source) && isId(value.postId);
   }

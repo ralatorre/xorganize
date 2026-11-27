@@ -19,7 +19,7 @@ export function PostText({ text }: { text: string }) {
       {cut ? (
         <button
           type="button"
-          class="post__more"
+          class="link-button post__more"
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >

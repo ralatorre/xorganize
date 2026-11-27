@@ -1,6 +1,12 @@
 /** Which of X's three themes the page shows, judged from its background colour. */
 
-export type Theme = 'light' | 'dim' | 'dark';
+export const THEMES = ['light', 'dim', 'dark'] as const;
+
+export type Theme = (typeof THEMES)[number];
+
+export function isTheme(value: unknown): value is Theme {
+  return (THEMES as readonly unknown[]).includes(value);
+}
 
 /** From a computed CSS colour such as `rgb(21, 32, 43)`. Anything unreadable is light. */
 export function themeOfColour(colour: string): Theme {

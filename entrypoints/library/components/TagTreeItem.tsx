@@ -3,6 +3,7 @@ import { useRef, useState } from 'preact/hooks';
 import type { TagId, TagSuggestion } from '@/src/db/types';
 import type { TagNode } from '@/src/library/tag-tree';
 import { TagDot } from '@/src/ui/TagDot';
+import { Icon } from './Icon';
 
 /**
  * One tag or group in the sidebar, and what is inside it. Groups start open.
@@ -39,7 +40,7 @@ export function TagTreeItem(props: {
             aria-label={`${node.label} group`}
             onClick={() => setOpen(!open)}
           >
-            <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+            <Icon name="chevron" size="tiny" />
           </button>
         ) : (
           <span class="tag-row__toggle" aria-hidden="true" />
@@ -64,12 +65,12 @@ export function TagTreeItem(props: {
             <button
               ref={toggle}
               type="button"
-              class="tag-row__manage"
+              class="icon-button icon-button--small tag-row__manage"
               aria-label={`Manage ${tag.name}`}
               aria-expanded={managed}
               onClick={() => onManage(managed ? undefined : tag.id)}
             >
-              ⋯
+              <Icon name="more" size="small" />
             </button>
           </>
         ) : (

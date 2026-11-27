@@ -7,6 +7,8 @@ export function ImageSetting(props: { enabled: boolean; onChange(enabled: boolea
     <label class="library__setting">
       <input
         type="checkbox"
+        role="switch"
+        class="switch"
         checked={props.enabled}
         onChange={(event) => props.onChange(event.currentTarget.checked)}
       />{' '}

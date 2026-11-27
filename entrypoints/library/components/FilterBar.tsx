@@ -22,8 +22,7 @@ export function FilterBar(props: {
         />
       ))}
       {selected.length > 1 ? (
-        <fieldset class="filters__match">
-          <legend>Match</legend>
+        <fieldset class="segmented filters__match" aria-label="Match">
           {(['all', 'any'] as const).map((option) => (
             <label key={option}>
               <input
@@ -31,8 +30,8 @@ export function FilterBar(props: {
                 name="match"
                 checked={match === option}
                 onChange={() => onChange({ type: 'match', match: option })}
-              />{' '}
-              {option === 'all' ? 'All' : 'Any'}
+              />
+              {option === 'all' ? 'All tags' : 'Any tag'}
             </label>
           ))}
         </fieldset>

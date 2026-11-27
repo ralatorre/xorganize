@@ -12,7 +12,7 @@ export function ConfirmDialog(props: {
     <ModalDialog title={props.title} onClose={props.onCancel}>
       <p class="modal__message">{props.message}</p>
       <div class="modal__buttons">
-        <button type="button" class="button button--quiet" autofocus onClick={props.onCancel}>
+        <button type="button" class="button" autofocus onClick={props.onCancel}>
           Cancel
         </button>
         <button type="button" class="button button--danger" onClick={props.onConfirm}>

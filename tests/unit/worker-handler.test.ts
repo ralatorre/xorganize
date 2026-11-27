@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalisePost } from '@/src/capture/normalise';
 import type { TagChange } from '@/src/db/tags';
 import type { Counts, TagSummary } from '@/src/db/types';
+import type { Theme } from '@/src/dom/theme';
 import type {
   CaptureClearMessage,
   CapturePostsMessage,
@@ -42,6 +43,7 @@ function setup(outcome: 'stored' | 'failed' = 'stored') {
   const cleared: CaptureClearMessage[] = [];
   const changes: TagChange[] = [];
   const notified: TagsChangedMessage[] = [];
+  const themes: Theme[] = [];
   const result = <T>(value: T) =>
     outcome === 'stored' ? Promise.resolve(value) : Promise.reject(new Error('quota'));
   const handle = createWorkerHandler({
@@ -57,9 +59,10 @@ function setup(outcome: 'stored' | 'failed' = 'stored') {
         result({ suggestions: [{ ...RUST, count: query.length }], recent: [RUST] }),
       set: (change) => (changes.push(change), result([RUST])),
     },
+    recordTheme: (theme) => (themes.push(theme), result(undefined)),
     notify: (message) => void notified.push(message),
   });
-  return { handle, saved, cleared, changes, notified };
+  return { handle, saved, cleared, changes, notified, themes };
 }
 
 describe('createWorkerHandler', () => {
@@ -83,6 +86,24 @@ describe('createWorkerHandler', () => {
 
   it('answers a content script that has connected', async () => {
     expect(await setup().handle({ type: 'content/ready' }, FROM_X)).toEqual({ ok: true });
+  });
+
+  it('keeps the theme x.com shows, for the library', async () => {
+    const { handle, themes } = setup();
+    expect(await handle({ type: 'theme/seen', theme: 'dim' }, FROM_X)).toEqual({ ok: true });
+    expect(themes).toEqual(['dim']);
+  });
+
+  it('says so when the theme cannot be kept, without rejecting', async () => {
+    const message = { type: 'theme/seen', theme: 'dark' };
+    expect(await setup('failed').handle(message, FROM_X)).toEqual({ ok: false });
+  });
+
+  it('ignores a theme from anywhere but x.com', () => {
+    const { handle, themes } = setup();
+    const sender = { ...FROM_X, url: 'https://evil.example/' };
+    expect(handle({ type: 'theme/seen', theme: 'dark' }, sender)).toBeUndefined();
+    expect(themes).toEqual([]);
   });
 
   it.each<[string, MessageSender]>([

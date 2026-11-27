@@ -8,7 +8,7 @@ export function Thumbnails({ items, sensitive }: { items: Thumbnail[]; sensitive
   if (sensitive && !revealed) {
     return (
       <div class="thumbnails thumbnails--hidden">
-        <button type="button" onClick={() => setRevealed(true)}>
+        <button type="button" class="button button--small" onClick={() => setRevealed(true)}>
           Show sensitive media
         </button>
       </div>

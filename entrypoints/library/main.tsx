@@ -2,7 +2,8 @@ import { render } from 'preact';
 import { DIAGNOSTICS } from '@/src/build';
 import { dismissBackupReminder, updateSettings } from '@/src/db/repo';
 import { library } from '@/src/db/schema';
-import type { AccountId, PostId } from '@/src/db/types';
+import type { AccountId, PostId, ThemeSetting } from '@/src/db/types';
+import type { Theme } from '@/src/dom/theme';
 import { createDiagnosticsStore } from '@/src/diagnostics/store';
 import { createKeyboardGuard } from '@/src/inline/keyboard-guard';
 import { loadAuthorOrder, loadCatalogue } from '@/src/library/browse';
@@ -11,12 +12,15 @@ import { createLibraryExport } from '@/src/library/exporter';
 import { createLibraryImport } from '@/src/library/importer';
 import { loadPosts } from '@/src/library/posts';
 import { createLibraryTagging } from '@/src/library/tagging';
+import { themeFor } from '@/src/library/theme';
 import { TAGS_CHANNEL, type TagsEditedNotice } from '@/src/messaging/protocol';
 import { createSearchClient } from '@/src/search/client';
 import type { ExportedFile } from '@/src/transfer/export';
 import { createPopover } from '@/src/ui/popover';
 import { App } from './App';
 import { Diagnostics } from './Diagnostics';
+import type { ColourScheme } from './use-theme';
+import './tokens.css';
 import './style.css';
 
 // Wiring only: the real database, the search worker, the clipboard, file
@@ -31,6 +35,7 @@ const search = createSearchClient(
 );
 const setRemoteImages = (enabled: boolean) => void updateSettings(db, { remoteImages: enabled });
 const setBackupReminder = (days: number) => void updateSettings(db, { backupReminderDays: days });
+const setTheme = (theme: ThemeSetting) => void updateSettings(db, { theme });
 const dismissReminder = (accountId: AccountId) =>
   void dismissBackupReminder(db, accountId, Date.now());
 
@@ -62,14 +67,30 @@ const save = (file: ExportedFile) => {
 };
 const exportTo = createLibraryExport(db, save, () => new Date());
 
+// The theme is set on the root element, which the tokens are keyed on. Until
+// the settings are read it follows the system.
+const dark = window.matchMedia('(prefers-color-scheme: dark)');
+const colourScheme: ColourScheme = {
+  dark: () => dark.matches,
+  watch: (onChange) => {
+    dark.addEventListener('change', onChange);
+    return () => dark.removeEventListener('change', onChange);
+  },
+};
+let theme: Theme = themeFor('system', undefined, dark.matches);
+const applyTheme = (chosen: Theme) => {
+  theme = chosen;
+  document.documentElement.dataset.theme = chosen;
+};
+applyTheme(theme);
+
 // Typing in the popover goes to the popover alone, not to the page's shortcuts.
 const guard = createKeyboardGuard(window);
-const dark = window.matchMedia('(prefers-color-scheme: dark)');
 const popoverFor = (accountId: AccountId) =>
   createPopover({
     view: window,
     guard,
-    theme: () => (dark.matches ? 'dark' : 'light'),
+    theme: () => theme,
     mountPoint: () => document.body,
     ...createLibraryTagging({ edits, accountId, schedule: (task) => void setTimeout(task, 0) }),
   });
@@ -89,6 +110,9 @@ if (root) {
       importer={importer}
       setRemoteImages={setRemoteImages}
       setBackupReminder={setBackupReminder}
+      setTheme={setTheme}
+      colourScheme={colourScheme}
+      applyTheme={applyTheme}
       dismissBackupReminder={dismissReminder}
       now={Date.now}
     >

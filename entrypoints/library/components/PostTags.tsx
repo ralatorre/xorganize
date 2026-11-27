@@ -1,5 +1,6 @@
 import type { TagSummary } from '@/src/db/types';
 import { TagChip } from './TagChip';
+import { Icon } from './Icon';
 
 /** A post's tags, and [+] to change them in the tag popover. */
 export function PostTags(props: { tags: readonly TagSummary[]; onTag(button: HTMLElement): void }) {
@@ -20,7 +21,7 @@ export function PostTags(props: { tags: readonly TagSummary[]; onTag(button: HTM
           data-action="tag"
           onClick={(event) => props.onTag(event.currentTarget)}
         >
-          +
+          <Icon name="plus" size="tiny" />
         </button>
       </li>
     </ul>

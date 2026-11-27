@@ -113,6 +113,18 @@ async function tagButtons(page: Page): Promise<string[]> {
   return labels;
 }
 
+/** The theme each tag button is drawn in, in page order. */
+async function buttonThemes(page: Page): Promise<string[]> {
+  const themes: string[] = [];
+  walk(await fullDom(page), false, (node, inShadow) => {
+    const theme = attribute(node, 'data-theme');
+    if (inShadow && theme && node.children?.some((child) => child.nodeName === 'BUTTON')) {
+      themes.push(theme);
+    }
+  });
+  return themes;
+}
+
 async function popoverOpen(page: Page): Promise<boolean> {
   let open = false;
   walk(await fullDom(page), false, (node, inShadow) => {
@@ -281,6 +293,18 @@ test('a change in one tab shows in another', async ({ context }) => {
   await first.keyboard.press('Enter');
 
   await expect.poll(() => tagButtons(second)).toEqual(['Tags: shared', 'Tag']);
+});
+
+test('buttons already on the page follow a change of X’s theme', async ({ context }) => {
+  await serveStandIn(context);
+  const site = await openSite(context);
+  await expect.poll(() => buttonThemes(site)).toEqual(['light', 'light']);
+
+  // X's display settings only restyle the body: nothing is added to the page.
+  await site.evaluate(() => {
+    document.body.style.background = 'rgb(21, 32, 43)';
+  });
+  await expect.poll(() => buttonThemes(site)).toEqual(['dim', 'dim']);
 });
 
 test('shows no buttons when no account is signed in', async ({ context }) => {

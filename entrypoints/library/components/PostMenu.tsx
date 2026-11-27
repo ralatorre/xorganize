@@ -1,4 +1,5 @@
 import { useRef, useState } from 'preact/hooks';
+import { Icon } from './Icon';
 
 /** The card's ⋯ menu: copy the link to the post, or take it out of the library. */
 export function PostMenu(props: { onCopyLink(): Promise<boolean>; onRemove(): void }) {
@@ -22,7 +23,7 @@ export function PostMenu(props: { onCopyLink(): Promise<boolean>; onRemove(): vo
       <button
         ref={toggle}
         type="button"
-        class="menu__toggle"
+        class="icon-button icon-button--small"
         aria-label="More actions"
         aria-expanded={open}
         onClick={() => {
@@ -30,20 +31,20 @@ export function PostMenu(props: { onCopyLink(): Promise<boolean>; onRemove(): vo
           setOpen(!open);
         }}
       >
-        ⋯
+        <Icon name="more" size="small" />
       </button>
       {open ? (
         <span class="menu__items" role="group" aria-label="Post actions">
           <button
             type="button"
-            class="menu__item"
+            class="button button--small button--quiet"
             onClick={() => void props.onCopyLink().then(setCopied)}
           >
             Copy link
           </button>
           <button
             type="button"
-            class="menu__item"
+            class="button button--small button--quiet"
             onClick={() => {
               setOpen(false);
               props.onRemove();

@@ -19,7 +19,7 @@ export function DeleteAllDialog(props: { onDelete(): void; onCancel(): void }) {
           Type “{DELETE_WORD}” to confirm
           <input
             type="text"
-            class="manage__input"
+            class="input"
             value={typed}
             autocomplete="off"
             spellcheck={false}
@@ -27,7 +27,7 @@ export function DeleteAllDialog(props: { onDelete(): void; onCancel(): void }) {
           />
         </label>
         <div class="modal__buttons">
-          <button type="button" class="button button--quiet" autofocus onClick={props.onCancel}>
+          <button type="button" class="button" autofocus onClick={props.onCancel}>
             Cancel
           </button>
           <button type="submit" class="button button--danger" disabled={!confirmed}>
