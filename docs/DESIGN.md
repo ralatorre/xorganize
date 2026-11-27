@@ -21,7 +21,7 @@ This document describes what the extension looks like and how it behaves. The im
 
 ## 2. Principles
 
-1. **Feels native.** Injected controls match X's icon size, spacing, hover states and current theme. Nothing shifts layout.
+1. **Native on x.com, our own in the library.** Injected controls match X's icon size, spacing, hover states and current theme, and nothing shifts layout. The library has its own calm, consistent look (7), and shows posts the way X does so they are recognised at a glance.
 2. **Tags belong to the user, not to X.** A tag survives the post being unbookmarked, unliked or deleted.
 3. **Passive by default.** The extension only records what the browser already loaded. Anything that drives the page (auto-scroll) is opt-in and user-started.
 4. **Degrades gracefully.** If the inline button cannot be injected, the library still works. If full post data is missing, a minimal record is saved from the page.
@@ -137,49 +137,70 @@ The library is one application shown in two containers:
 - **Full tab** (`library.html`), opened from the toolbar popup or a shortcut. The primary view.
 - **Side panel**, a narrow single-column version docked beside x.com. Chromium only.
 
+> **As first built:** the library predates the look described here and in section 7. Settings sit at the bottom of the sidebar, the controls above the list are plain text and native selects, the card's actions are an "Open on X" link and an inline `⋯` row, a tag's panel opens inside the sidebar, Remove from library asks for confirmation, results are reported beside the button that caused them, and below 720 px the sidebar stacks above the list. Milestone M5, Look and feel (SPEC 17), brings it to this section.
+
 Full tab layout:
 
 ```
-┌───────────────────┬──────────────────────────────────────────────────────┐
-│ xorganize         │ [ Search posts, @authors, #tags...            ]  [⚙] │
-│                   │ Filters: [rust x] [typescript x]  Match: (All) Any   │
-│ SOURCES           │ 37 posts · Sort: Saved (newest)                      │
-│   All        2104 ├──────────────────────────────────────────────────────┤
-│   Bookmarks  1832 │ [ ] (o) Display Name @handle · 12 Mar 2026           │
-│   Likes       410 │         Post text, up to four lines, then a fade     │
-│   Tagged only  22 │         [img] [img]                                  │
-│   Untagged    967 │         [rust] [typescript] [+]         Open on X  ⋯ │
-│                   ├──────────────────────────────────────────────────────┤
-│ TAGS         [+]  │ [ ] (o) Another Author @other · 2 Feb 2026           │
-│   ai          212 │         Another post body...                         │
-│   design       88 │         [rust] [+]                      Open on X  ⋯ │
-│ v dev             ├──────────────────────────────────────────────────────┤
-│     rust       37 │ ...                                                  │
-│     typescript 128│                                                      │
-│   recipes      14 │                                                      │
-│   to-read      61 │                                                      │
-└───────────────────┴──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ [#] xorganize       [ Search posts, @authors, #tags      / ]  ?  ⚙  @me ▾│
+├──────────────────────────────────────────────────────────────────────────┤
+│                     All posts  37 posts       Date saved ▾   [Export ▾] │
+│  All posts   2104   [design x] [typography x]  (All tags|Any tag)  Clear │
+│  Bookmarks   1832   ┌──────────────────────────────────────────────────┐ │
+│  Likes        410   │ Your last backup was 45 days ago. [Back up now]  │ │
+│  Tagged only   22   └──────────────────────────────────────────────────┘ │
+│  Untagged     967   (o) Display Name @handle · 12 Mar            [B] [L] │
+│                         Post text, up to four lines, then Show more     │
+│  Tags            +      ┌────────────────┬────────┐                     │
+│  • ai          212      │     image      │ image  │                     │
+│  • design       88      └────────────────┴────────┘                     │
+│  v dev         165      [• rust] [• typescript] [+]       [↗] [link] [⋯]│
+│     • rust      37   ──────────────────────────────────────────────────  │
+│     • typescript 128  (o) Another Author @other · 2 Feb                  │
+│  • recipes      14      ...                                              │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Header bar**, across the top: the extension's mark and name; the search box, with `/` shown as its shortcut; `?` for the keyboard shortcuts; the gear for Settings (4.7); and the X account shown, as a menu that switches between the accounts this browser holds (6).
+
+**Width.** The page is centred, at most 1180 px wide: a 236 px sidebar and a list column of at most 720 px, so post text stays near X's own line length. Below 720 px the side panel layout below takes over.
 
 Sidebar:
 
-- **Sources** are mutually exclusive quick filters. "All" is every bookmarked, liked or tagged post. "Tagged only" is tagged but neither bookmarked nor liked. "Untagged" is bookmarked or liked with no tag: the inbox for triage. A source and tags combine.
-- **Tags** are listed by name with counts, groups among them in the same order. Click to show only that tag; click it again to clear it. `Ctrl`/`Cmd`+click adds a tag to the filter, or takes it out. A group can be collapsed. Each tag has a `⋯` button, shown on hover and focus, which a right click on the tag also opens. It offers Rename, Change colour, Merge into another tag, and Delete, in a panel under the tag. Esc closes it.
+- **Sources** are mutually exclusive quick filters, each with its icon: "All posts" is every bookmarked, liked or tagged post. "Tagged only" is tagged but neither bookmarked nor liked. "Untagged" is bookmarked or liked with no tag: the inbox for triage, and its view says so under its title. A source and tags combine.
+- **Tags** are listed by name with counts, groups among them in the same order. Click to show only that tag; click it again to clear it. `Ctrl`/`Cmd`+click adds a tag to the filter, or takes it out, and a line under the list says so. A tag no post carries is shown dimmed, with 0. "+" beside the heading creates a tag.
+- **Groups.** Clicking a group's name shows every tag in it, matching any of them. The arrow beside it folds the group.
+- **Managing a tag.** On hover and focus a tag's `⋯` button takes the place of its count, so counts stay in one column. It, or a right click on the tag, opens a menu: Rename, Change colour (the palette, in the menu), Merge into another tag, and Delete. Esc closes it.
 - Renaming to a name another tag already has is refused, with a pointer to Merge. A change of casing alone is allowed.
 - Merging moves every post of one tag to the other and removes the first.
 - Deleting a tag takes it off every post. It asks for confirmation and states how many posts are affected. It never removes a bookmarked or liked post. A post that is in the library only because of that tag leaves it, as when its last tag is taken off, and the confirmation says how many will.
 
-Main column:
+Main column, from the top:
 
-- **Search** matches post text, author name and handle, by any part of a word, ignoring case and accents. Every word must match, in any order, and `"quoted words"` must appear together. `#name` filters by tag and `@handle` by author, so the whole query can be typed; `#"to read"` names a tag with a space. The last word, while it is still being typed, also matches names that start with it, so `#ru` already shows `rust`. Several `#` tags must all match, several `@` authors any one. Search combines with the source and tag filters, and keeps the chosen sort. Results update as the user types, and as posts arrive from x.com. Clear filters empties the search too.
-- **Match All / Any** switches between requiring every selected tag and any of them. It appears once two tags are selected.
-- **Sort**: saved order (newest first, the default; for Bookmarks and Likes, X's own order), post date (newest first), author (A to Z).
-- **No posts match** offers Clear filters, which returns to All with no tags and keeps the sort.
-- **Post card** shows avatar, name, handle, date, text, media thumbnails, a quoted post if present, and tag chips. The `[+]` chip opens the same tag popover as the inline button. "Open on X" opens the original in a new tab. The `⋯` menu offers Copy link and Remove from library. Remove asks first: the post's tags go with it, and a post still bookmarked or liked on X comes back the next time that page loads.
+- **Toolbar**: the view's title (the source, or the tag when one tag is chosen) and how many posts it lists; then **Sort** and **Export** as menus.
+- **Search** matches post text, author name and handle, by any part of a word, ignoring case and accents. Every word must match, in any order, and `"quoted words"` must appear together. `#name` filters by tag and `@handle` by author, so the whole query can be typed; `#"to read"` names a tag with a space. The last word, while it is still being typed, also matches names that start with it, so `#ru` already shows `rust`. Several `#` tags must all match, several `@` authors any one. Search combines with the source and tag filters, and keeps the chosen sort. Results update as the user types, and as posts arrive from x.com.
+- **Filters row**, shown while anything narrows the view: the search as a chip, each chosen tag as a removable chip, **All tags / Any tag** as a two-way switch once two tags are chosen, and **Clear all**, which returns to All posts with no tags and no search, and keeps the sort.
+- **Sort** menu: Date saved (newest first, the default; for Bookmarks and Likes, X's own order), Date posted (newest first), Author (A to Z). Each choice says what it means in a second line.
+- **Export** menu: exports exactly the posts in the current view as JSON ("Can be imported again") or CSV ("For spreadsheets") (see 5.6). The result is a toast.
+- **Backup reminder**, under the toolbar when due (5.6): a tinted bar with **Back up now** and **Remind me later**.
+- **No posts match**: an outlined panel that names what was searched for and in which source, with **Clear search** when there is a search, and **Show all posts**.
+
+Post card:
+
+- Avatar, name, @handle and date, as X shows them, so a post is recognised at a glance. The date leaves out the year within the current year. At the right of that line, a bookmark mark and a like mark show why the post is in the library.
+- Text, cut to four lines with **Show more**.
+- Media in one rounded frame, laid out as X does: one wide, two side by side, three as one tall and two small, four as a grid. Videos and gifs are their still image, with a "Video" or "GIF" badge.
+- A quoted post in its own rounded frame, with its author's small avatar, name, handle and date.
+- A footer row: the tag chips, then the tag button. With no tag it reads "Add tag"; with tags it is a small `+`. Clicking a chip shows that tag; `Ctrl`/`Cmd`+click adds it to the filter. The tag button opens the same tag popover as the inline button, below it and starting at its left edge.
+- A post X no longer serves shows an "Unavailable on X" label in the footer. One that has been unbookmarked shows "No longer bookmarked".
+- **Actions**, at the right of the footer, shown while the card is hovered or has focus: Open on X (in a new tab), Copy link, and `⋯`. The `⋯` menu offers Edit tags, Open on X and Copy link, each with its shortcut, and Remove from library.
+- **Remove from library** acts at once, and a toast offers **Undo** while it shows. The menu item says, in a second line, that the post's tags go with it and that it comes back if it is still bookmarked or liked on X (decision 7).
+- The card has a quiet background on hover and a focus ring when it has keyboard focus.
 - Changes made in the library show at once in open x.com tabs.
-- **Export view**, beside Sort, exports exactly the posts in the current filter as JSON or CSV (see 5.6), and then says how many it exported.
-- A post that has been unbookmarked or deleted on X is still shown, with a muted "No longer bookmarked" or "Unavailable on X" label.
 - The list is virtualised, so tens of thousands of posts scroll smoothly.
+
+**Toasts.** Every result is reported in one place, at the bottom centre: "Link copied", "Exported 37 posts as CSV", "Removed from library" with Undo, "Backup saved: …". A toast closes itself after five seconds, or with its close button. Only one shows at a time; a new one replaces it.
 
 Bulk actions: ticking any checkbox reveals a bar.
 
@@ -193,9 +214,14 @@ Bulk actions: ticking any checkbox reveals a bar.
 
 Library keyboard shortcuts: `/` focuses search, `j` / `k` move between posts, `t` tags the focused post, `x` toggles selection, `o` opens the post on X, `?` shows the shortcut list. They act only outside a field or dialog, and never while typing in the tag popover.
 
-> **As first built:** every shortcut except `x`, which comes with bulk actions (M6).
+> **As first built:** every shortcut except `x`, which comes with bulk actions (M7).
 
-Side panel differences: the sidebar collapses into a filter dropdown, cards are denser, and bulk selection is omitted.
+**Side panel, and any window narrower than 720 px:**
+
+- The header holds the mark, the search box, a filter button and the gear. The filter button shows how many tags are chosen.
+- Sources become a row of pills with counts under the header.
+- The filter button opens a sheet from the bottom with the tags, each with a tick when chosen, All tags / Any tag once two are chosen, and a button that says how many posts it will show ("Show 4 posts").
+- Cards are denser: a 32 px avatar, three lines of text, no media. Bulk selection is omitted.
 
 ### 4.6 Toolbar popup
 
@@ -217,6 +243,8 @@ The toolbar icon shows a small badge while a capture session is running.
 
 ### 4.7 Settings
 
+Settings is a page of the library, opened from the gear in its header, with "Back to library" in the header in place of the search box. A short list on the left jumps to its groups. Each group is a panel of rows: a title, a line saying what the setting does, and its control at the right.
+
 | Group | Setting | Default |
 | --- | --- | --- |
 | Capture | Capture bookmarks | On |
@@ -224,17 +252,20 @@ The toolbar icon shows a small badge while a capture session is running.
 | Capture | Prompt for tags after bookmarking | On |
 | Capture | Prompt for tags after liking | Off |
 | Library | Keep posts after they are unbookmarked or unliked | Tagged posts only |
-| Library | Show images from X (avatars and thumbnails, loaded without cookies) | On |
-| Appearance | Theme | Follow X on x.com, follow system in the library |
+| Appearance | Theme: Match X, System, Light, Dim or Dark, each shown as a small preview | Match X |
+| Privacy | Show images from X (avatars and thumbnails, loaded without cookies). Says that, turned off, the library makes no network request at all. | On |
+| Privacy | Stored in this browser: what the library holds for each account, and its size. Read only. | |
 | Shortcuts | Open tag popover | `Alt+T` |
-| Data | Export library (JSON backup, or CSV) | |
-| Data | Import library (merge or replace) | |
-| Data | Backup reminder | Every 30 days |
-| Data | Delete all data | Requires typing a confirmation word. Deletes every account's posts, tags and tag assignments; keeps settings |
+| Backup and restore | Back up the library (JSON), with when it was last done | |
+| Backup and restore | Export as CSV, which says it cannot be imported again | |
+| Backup and restore | Restore from a backup (merge or replace) | |
+| Backup and restore | Backup reminder | Every 30 days |
+| Danger zone | Delete all data | Requires typing a confirmation word. Deletes every account's posts, tags and tag assignments; keeps settings |
 
-> **As first built:** until the settings page (M6), settings are under Settings at the bottom of the library's sidebar: "Show images from X", "Export library" (JSON backup or CSV), "Import backup", "Backup reminder" and "Delete all data…". The backup reminder shows in the library only, above the search box, until the popup (M6).
->
-> "Delete all data…" opens a dialog that says what goes and what stays: every post, tag and tag assignment, for every X account in this browser; settings stay, so that a choice such as not loading images from X is not undone; nothing on X changes. Its button stays disabled until "delete" is typed, in any case. Cancel has focus first. Afterwards the library shows its empty state, from which a backup can be restored.
+- **Theme.** Match X uses the theme last seen on x.com: Light, Dim or Dark. Until x.com has been visited, it follows the system. System follows the system's light or dark setting. The tag button and popover on x.com always follow X, whatever the library uses.
+- The Danger zone panel has a red-tinted border, and its button is outlined in red. "Delete all data…" opens a dialog that says what goes and what stays: every post, tag and tag assignment, for every X account in this browser; settings stay, so that a choice such as not loading images from X is not undone; nothing on X changes. Its button stays disabled until "delete" is typed, in any case. Cancel has focus first. Afterwards the library shows its empty state, from which a backup can be restored.
+
+> **As first built:** until the Settings page (M5, Look and feel), settings are under Settings at the bottom of the library's sidebar: "Show images from X", "Export library" (JSON backup or CSV), "Import backup", "Backup reminder" and "Delete all data…". There is no theme setting: the library follows the system. The Capture, Library and Shortcuts rows come with M6 and M7. The backup reminder shows in the library only until the popup (M7).
 
 ## 5. Key flows
 
@@ -304,8 +335,8 @@ The post loses that source. Depending on the "Keep posts" setting it stays in th
 
 | Situation | Behaviour |
 | --- | --- |
-| Empty library | Illustration, one sentence, and the "Capture my bookmarks" button. "Restore from a backup" imports a JSON backup (5.6). |
-| No search results | "No posts match" with a button that clears filters. |
+| Empty library | A small drawing, "Your library is empty", one sentence on what the extension does, and three numbered steps: open your bookmarks on X, scroll to the end or let xorganize scroll, tag posts anywhere on X. **Open my bookmarks on X** is the primary button, **Restore from a backup** the secondary one (5.6). A last line says that everything stays in this browser. |
+| No search results | "No posts match", naming the search and the source ("Nothing in Bookmarks matches “tokio”"), with **Clear search** when there is a search and **Show all posts** (4.5). |
 | Post deleted or author suspended | Cached copy stays visible, labelled "Unavailable on X". |
 | X changes its layout and the tag button cannot be injected | The library and popup keep working. The popup shows "Inline tagging is unavailable, check for an update". |
 | X changes its data format and capture stops | The capture banner shows a warning rather than a silent zero. Existing data is unaffected. |
@@ -317,12 +348,94 @@ The post loses that source. Depending on the "Keep posts" setting it stays in th
 
 ## 7. Visual design, theming, accessibility
 
-- **Theme on x.com:** injected UI reads X's active background colour and picks matching light, dim or dark tokens. It re-reads when the theme changes.
-- **Theme in the library:** follows the system setting, with a manual override.
-- **Isolation:** injected UI is rendered inside a shadow root so that X's styles and the extension's styles cannot affect each other.
-- **Tag colours:** a fixed palette of twelve colours, each with a light and dark variant that meets WCAG AA contrast for text. New tags get the next unused colour.
-- **Accessibility:** every control has an accessible name. The popover is a labelled dialog with a combobox and listbox. On close it returns focus to where it was opened from: the tag button, or the post when opened with the shortcut, so that X's `j` and `k` carry on from there. All actions are reachable by keyboard. Motion respects `prefers-reduced-motion`. Colour is never the only indicator of state.
-- **Branding:** the extension uses its own icon and name. It does not use X's logo or trademarks in its artwork.
+Two looks, on purpose (decision 9):
+
+- **On x.com**, the tag button, popover and toasts look like part of X: X's icon size, spacing, hover tint, font and current theme. Nothing shifts layout.
+- **In the library**, the extension has its own look, set out below. Only posts keep X's shape (avatar, name, handle, date, text, media), so that they are recognised.
+
+### 7.1 Themes
+
+The library has three themes: Light, Dim and Dark (4.7). On x.com, injected UI reads X's active background colour and picks matching light, dim or dark tokens, and re-reads when the theme changes.
+
+Library tokens. Text colours are given against `bg`; every text pair must meet WCAG AA (4.5:1), which a unit test checks.
+
+| Token | Use | Light | Dim | Dark |
+| --- | --- | --- | --- | --- |
+| `bg` | Page | `#ffffff` | `#15181e` | `#0a0b0d` |
+| `surface` | Panels, cards in settings | `#ffffff` | `#1b1f26` | `#111317` |
+| `raised` | Menus, popover, dialogs | `#ffffff` | `#222731` | `#17191e` |
+| `field` | Search box, switches, pills | `#f2f4f7` | `#20252d` | `#15171b` |
+| `hover` | Hovered rows and buttons | `#f1f3f6` | `#262c36` | `#1b1e23` |
+| `card-hover` | Hovered post card | `#f8f9fb` | `#191c23` | `#0f1114` |
+| `chip` | Tag chips | `#eef0f3` | `#272d37` | `#1c1f25` |
+| `border` | Dividers | `#e7e9ee` | `#2a303a` | `#1f2228` |
+| `border-strong` | Button and field outlines | `#d3d8df` | `#3b4350` | `#2f343c` |
+| `text` | Body text | `#14161a` | `#e9ecf1` | `#e8e9eb` |
+| `text-2` | Secondary text, counts, handles | `#5a616d` | `#a3abb8` | `#969ca6` |
+| `text-3` | Icons and placeholders only, not text | `#7d8591` | `#7f8896` | `#6f7680` |
+| `danger` | Destructive actions | `#c8202b` | `#ff6b6b` | `#ff6b6b` |
+| `notice-bg` / `notice-text` | Backup reminder | `#fbf5e8` / `#6d4500` | `#2a2418` / `#f0d08f` | `#1f1b12` / `#eacb8a` |
+| `toast-bg` / `toast-text` | Toasts, the inverse of the page | `#17191d` / `#f3f4f6` | `#eceff3` / `#15181e` | `#e8e9eb` / `#0a0b0d` |
+
+**Accent.** Indigo, `#5b5bd6`, its own colour and not X's blue. It fills primary buttons, the selected theme, switches and the mark, with white text on it. Derived from it:
+
+- `accent-ink`, for accent-coloured text and icons: mixed 12% towards black in Light, 42% towards white in Dim and Dark.
+- `accent-soft`, the selected-row tint: 11% of the accent in Light, 24% in Dim and Dark.
+
+Shadows are soft and used only for things that float: menus, the popover, dialogs and toasts.
+
+### 7.2 Type, space and shape
+
+- **Font:** Inter, packaged with the extension (SIL Open Font License), so the library looks the same on every system and loads nothing from the network. Scripts it does not cover fall back to the system font. On x.com, injected UI uses X's own font stack.
+- **Sizes:**
+  - 12 px: section labels, counts.
+  - 13 px: buttons, secondary lines, toasts.
+  - 14 px: interface text.
+  - 15 px: post text.
+  - 17 px: dialog titles.
+  - 20 px: the view title.
+  - 26 px: the empty state's heading.
+
+  Weights are 400, 500, 600 and 650. Counts use tabular figures.
+- **Spacing** on a 4 px grid: mostly 4, 8, 12, 16, 24 and 32. 6 and 10 are used inside small controls.
+- **Corners:**
+  - 7 to 8 px: buttons and rows.
+  - 10 px: the search box.
+  - 12 px: menus and the reminder.
+  - 14 px: media, quoted posts, the popover and settings panels.
+  - 16 px: dialogs.
+  - Round: chips, pills and avatars.
+- **Sizes of controls:** buttons are 34 px high (28 small, 42 large), icon buttons 36 px (30 small), sidebar rows 34 px, the header 60 px.
+
+### 7.3 Components
+
+- **Buttons**, one set used everywhere:
+  - **primary** (accent fill), one per view at most;
+  - **secondary** (outlined);
+  - **quiet** (no outline until hovered);
+  - **danger** (red fill), only for the confirming button of a destructive dialog;
+  - **danger outline**, for the button that opens one.
+- **Icons:** the extension's own set, drawn on a 24 px grid with a 1.75 px rounded stroke, inline SVG, no icon font and no dependency. They include:
+  - all posts, bookmark, like, tag and untagged;
+  - search, settings, help and account;
+  - plus, close, chevron and more;
+  - open on X, copy link, remove, rename, colour and merge;
+  - sort, export and import;
+  - backup, privacy, warning and tick;
+  - image and play.
+
+  Icon-only buttons carry an accessible name and a tooltip.
+- **The mark:** the tag drawing used by the inline button, white on an accent rounded square.
+- **Menus** for every choice that is not a setting row: account, sort, export, the card's `⋯`, a tag's `⋯`. They open under their button, close on Esc or a click outside, and put focus back on the button.
+- **Form controls** are styled to match: the switch for on and off settings, a select-like button that opens a menu for choices, the two-way switch for All tags / Any tag.
+- **Tag colours:** a fixed palette of twelve colours, each with a light and dark variant that meets WCAG AA contrast for text. New tags get the next unused colour. Shown as a dot before the tag's name.
+- **Motion:** colour and opacity change over 120–150 ms on hover, focus and when menus open. Only the group arrow turns. Nothing moves when `prefers-reduced-motion` is set.
+
+### 7.4 Isolation, accessibility, branding
+
+- **Isolation:** injected UI is rendered inside a shadow root so that X's styles and the extension's styles cannot affect each other. The tag popover takes the token set of where it is shown: X's on x.com, the library's in the library.
+- **Accessibility:** every control has an accessible name. The popover is a labelled dialog with a combobox and listbox. On close it returns focus to where it was opened from: the tag button, or the post when opened with the shortcut, so that X's `j` and `k` carry on from there. All actions are reachable by keyboard, including the card actions that otherwise show only on hover. Focus is shown by a 2 px accent ring. Motion respects `prefers-reduced-motion`. Colour is never the only indicator of state: the chosen source is also bold, the chosen theme also ringed, and the bookmark and like marks have names.
+- **Branding:** the extension uses its own icon, name and colours. It does not use X's logo, trademarks or brand colour in its artwork or its interface.
 
 ## 8. Decisions
 
@@ -332,5 +445,8 @@ The post loses that source. Depending on the "Keep posts" setting it stays in th
 4. **The extension never writes to X.** Tagging a post does not bookmark or like it.
 5. **The side panel does not follow the page in v1.** It is a compact library and nothing more.
 6. **Deleting a tag removes the posts only it kept.** A post that is in the library only because it was tagged leaves when it loses its last tag, whether that tag is taken off or deleted. Keeping it would leave a post that no source and no tag lists, which nothing could show or clean up. A tag deletion never removes a bookmarked or liked post, and its confirmation states how many posts will leave (4.5).
-7. **Removing a post does not touch X.** Following decision 4, Remove from library does not unbookmark or unlike the post. A post still bookmarked or liked on X therefore comes back the next time that page is captured, and the confirmation says so (4.5). To keep it out, unbookmark or unlike it on X as well.
+7. **Removing a post does not touch X.** Following decision 4, Remove from library does not unbookmark or unlike the post. A post still bookmarked or liked on X therefore comes back the next time that page is captured, and the Remove item says so (4.5). To keep it out, unbookmark or unlike it on X as well.
 8. **The JSON backup is the only way to restore.** CSV is for reading the library elsewhere and is never imported. A CSV row has no tag colours, no unused tags, no order from X, no media details, links or quoted posts, and no tagging times, so a library restored from it would be poorer than the one exported. A sheet saved from a spreadsheet may also hold rounded post IDs (5.6), which an import could not tell from real ones.
+9. **The library has its own look; x.com keeps X's.** Copying X's interface in the library would make it read as an imitation of X, invite confusion with X itself, and need chasing whenever X restyles. The library is also a different kind of tool: filters, menus, settings and bulk actions, for which X has no patterns. So the library has its own colours, mark, type and controls (7), and keeps only the shape of a post. On x.com the opposite holds: what the extension adds must look like part of the page (principle 1).
+10. **Removing a post is undone, not confirmed.** Removing one post is common during triage and easy to reverse, so it happens at once and a toast offers Undo for five seconds, which puts back the post and its tag assignments. A question every time would slow triage and teach people to click through it. Destructive actions that cannot be put back from memory keep their confirmation: deleting a tag, replacing the library on import, and deleting all data.
+11. **The library's default theme is Match X.** Someone who reads X in Dim expects their saved posts in Dim too. The extension already reads X's theme to draw the tag button, so the library can follow it without asking for anything more (SPEC 9.3). Until x.com has been visited, it follows the system.
