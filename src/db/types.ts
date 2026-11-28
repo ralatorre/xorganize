@@ -88,6 +88,17 @@ export interface Settings {
 }
 
 /** When the account's library was last backed up, and what else the backup reminder counts from. */
+/** What this browser holds for one X account (DESIGN, 4.7). */
+export interface StoredAccount {
+  accountId: AccountId;
+  /** The @handle last seen on x.com for it, without the @, if it has been seen. */
+  handle?: string;
+  posts: number;
+  tags: number;
+  /** Tags on posts. */
+  assignments: number;
+}
+
 export interface BackupTimes {
   /** The last whole-library JSON export. */
   lastBackupAt?: number;

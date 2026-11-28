@@ -8,7 +8,7 @@ import {
   postEntry,
   rawPost,
 } from '../fixtures/posts';
-import { expect, test } from './fixtures';
+import { backToLibrary, expect, openSettings, test } from './fixtures';
 
 const VIEWER = '9000000000000000001';
 const SOMEONE_ELSE = '9000000000000000002';
@@ -150,7 +150,7 @@ async function counts(page: Page): Promise<Record<string, string>> {
 }
 
 const totals = (all: number, bookmarks: number, likes: number, tagged = 0) => ({
-  All: String(all),
+  'All posts': String(all),
   Bookmarks: String(bookmarks),
   Likes: String(likes),
   'Tagged only': String(tagged),
@@ -274,7 +274,7 @@ test('finds posts by their text and author, and keeps up with new ones', async (
   await expect(status).toHaveText('1 post');
 
   // A post stored while searching is found at once.
-  await source(library, 'All').click();
+  await source(library, 'All posts').click();
   await search.fill('home');
   await expect(library.getByRole('heading', { name: 'No posts match' })).toBeVisible();
   await timeline(site, 'HomeTimeline');
@@ -451,13 +451,18 @@ test('shows images from X without cookies or a referrer, and none once turned of
   }
 
   // Turned off, no image is requested, and that survives a reload.
-  await library.getByRole('switch', { name: /Show images from X/ }).uncheck();
+  await openSettings(library);
+  await library.getByRole('switch', { name: 'Show images from X' }).uncheck();
+  await backToLibrary(library);
+  await expect(library.locator('.post')).toHaveCount(3);
   await expect(library.locator('img')).toHaveCount(0);
   const before = requests.length;
   await library.reload();
   await expect(library.locator('.post')).toHaveCount(3);
-  await expect(library.getByRole('switch', { name: /Show images from X/ })).not.toBeChecked();
   await expect(library.locator('img')).toHaveCount(0);
+  await openSettings(library);
+  await expect(library.getByRole('switch', { name: 'Show images from X' })).not.toBeChecked();
+  await backToLibrary(library);
   await expect(card('Photo and video').getByText('2 attachments')).toBeVisible();
   expect(requests.length).toBe(before);
 });

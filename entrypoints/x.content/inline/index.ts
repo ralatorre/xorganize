@@ -10,9 +10,10 @@ import { POPOVER_SUGGESTIONS } from '@/src/inline/popover-model';
 import { isShortcutPress, matchesShortcut, postAnchor } from '@/src/inline/shortcut';
 import { createTagState } from '@/src/inline/tag-state';
 import { createTagger } from '@/src/inline/tagger';
-import { createThemeReport } from '@/src/inline/theme-report';
+import { createChangeReport } from '@/src/inline/change-report';
 import { createTagsListener, type ListeningPort } from '@/src/inline/tags-port';
 import { SELECTORS } from '@/src/dom/selectors';
+import { handleOfProfileLink } from '@/src/dom/viewer-handle';
 import {
   MAX_SUGGESTIONS,
   type RuntimeMessage,
@@ -43,12 +44,23 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
   // Only a change is acted on: buttons on the page take it, and the worker is told.
   const checkTheme = watchTheme(
     document,
-    createThemeReport((seen) => {
+    createChangeReport<Theme>((seen) => {
       theme = seen;
       for (const group of buttons.values()) for (const button of group) button.setTheme(seen);
       void deps.send({ type: 'theme/seen', theme: seen });
     }),
   );
+  // The account's handle, for the library's header. Only the handle is read.
+  const reportAccount = createChangeReport<{ accountId: string; handle: string }>(
+    (seen) => void deps.send({ type: 'account/seen', ...seen }),
+    ({ accountId, handle }) => `${accountId} ${handle}`,
+  );
+  const checkAccount = () => {
+    const accountId = deps.accountId();
+    const link = document.querySelector(SELECTORS.profileLink);
+    const handle = handleOfProfileLink(link?.getAttribute('href'));
+    if (accountId !== undefined && handle !== undefined) reportAccount({ accountId, handle });
+  };
 
   const withAccount = <Message extends RuntimeMessage>(build: (accountId: string) => Message) => {
     const accountId = deps.accountId();
@@ -112,7 +124,10 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
 
   startMounter<TagButton>({
     enabled: () => deps.accountId() !== undefined,
-    beforeCheck: checkTheme,
+    beforeCheck: () => {
+      checkTheme();
+      checkAccount();
+    },
     create: (postId) => {
       const button = createTagButton(postId, (control) => popover.toggle(control));
       // Keys on the button stay from the page, but Alt+T still works there.

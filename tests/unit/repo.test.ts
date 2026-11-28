@@ -3,21 +3,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalisePost, type CapturedPost } from '@/src/capture/normalise';
 import {
   activeAccount,
+  chooseAccount,
   clearSource,
   counts,
   mergePost,
   readSettings,
   readXTheme,
   recentKey,
+  recordHandle,
   recordXTheme,
   saveCapture,
   sortKey,
   sourceIds,
+  storedAccounts,
   unknownKey,
   updateSettings,
   type CaptureBatch,
 } from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
+import { setPostTags } from '@/src/db/tags';
 import type { Settings } from '@/src/db/types';
 import { rawPost, type RawPostOptions } from '../fixtures/posts';
 
@@ -514,5 +518,72 @@ describe('the theme seen on x.com', () => {
   it('is not a setting', async () => {
     await recordXTheme(db, 'dim');
     expect((await readSettings(db)).theme).toBe('x');
+  });
+});
+
+describe('the accounts in this browser', () => {
+  const THIRD = '10000000000000000003';
+
+  it('lists every account with posts or tags, in the order of their IDs, with what each holds', async () => {
+    await saveCapture(
+      db,
+      batch({ accountId: THIRD, source: 'bookmark', items: [{ post: post('3') }] }),
+    );
+    await saveCapture(
+      db,
+      batch({ source: 'bookmark', items: [{ post: post('1') }, { post: post('2') }] }),
+    );
+    await setPostTags(db, { accountId: ACCOUNT, postId: '1', add: ['a', 'b'], remove: [] });
+    await setPostTags(db, { accountId: ACCOUNT, postId: '2', add: ['a'], remove: [] });
+    await db.tags.put({
+      accountId: OTHER,
+      id: 'kept',
+      name: 'kept',
+      nameKey: 'kept',
+      color: 0,
+      createdAt: 0,
+      lastUsedAt: 0,
+    });
+
+    expect(await storedAccounts(db)).toEqual([
+      { accountId: ACCOUNT, posts: 2, tags: 2, assignments: 3 },
+      { accountId: OTHER, posts: 0, tags: 1, assignments: 0 },
+      { accountId: THIRD, posts: 1, tags: 0, assignments: 0 },
+    ]);
+  });
+
+  it('is empty when nothing is stored', async () => {
+    expect(await storedAccounts(db)).toEqual([]);
+  });
+
+  it('gives the handle last seen on x.com, written only when it changed', async () => {
+    await saveCapture(db, batch({ source: 'like', items: [{ post: post('1') }] }));
+    await recordHandle(db, ACCOUNT, 'first_name');
+    await recordHandle(db, ACCOUNT, 'second_name');
+    const put = vi.spyOn(db.meta, 'put');
+    await recordHandle(db, ACCOUNT, 'second_name');
+
+    expect(put).not.toHaveBeenCalled();
+    expect((await storedAccounts(db))[0]?.handle).toBe('second_name');
+  });
+
+  it('leaves out a stored handle that is not a handle', async () => {
+    await saveCapture(db, batch({ source: 'like', items: [{ post: post('1') }] }));
+    await db.meta.put({ accountId: ACCOUNT, key: 'handle', value: 'not a handle' });
+    expect((await storedAccounts(db))[0]).not.toHaveProperty('handle');
+  });
+
+  it('can show another account’s library, but only one that holds something', async () => {
+    await saveCapture(db, batch({ source: 'like', items: [{ post: post('1') }] }));
+    await saveCapture(
+      db,
+      batch({ accountId: OTHER, source: 'like', items: [{ post: post('2') }] }),
+    );
+    expect(await activeAccount(db)).toBe(OTHER);
+
+    expect(await chooseAccount(db, ACCOUNT)).toBe(true);
+    expect(await activeAccount(db)).toBe(ACCOUNT);
+    expect(await chooseAccount(db, THIRD)).toBe(false);
+    expect(await activeAccount(db)).toBe(ACCOUNT);
   });
 });

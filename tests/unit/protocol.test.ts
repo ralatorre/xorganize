@@ -45,6 +45,21 @@ describe('runtime messages', () => {
       expect(isRuntimeMessage({ type: 'theme/seen', theme })).toBe(false);
     },
   );
+
+  it('accepts the account’s handle seen on x.com', () => {
+    const message = { type: 'account/seen', accountId: '9000000000000000001', handle: 'some_one' };
+    expect(isRuntimeMessage(message)).toBe(true);
+  });
+
+  it.each([
+    ['an account that is not an ID', { accountId: 'me', handle: 'some_one' }],
+    ['a handle with an @', { accountId: '9000000000000000001', handle: '@some_one' }],
+    ['a handle with a slash', { accountId: '9000000000000000001', handle: 'some/one' }],
+    ['a handle too long', { accountId: '9000000000000000001', handle: 'a'.repeat(21) }],
+    ['no handle', { accountId: '9000000000000000001' }],
+  ])('rejects %s', (_, fields) => {
+    expect(isRuntimeMessage({ type: 'account/seen', ...fields })).toBe(false);
+  });
 });
 
 describe('response messages', () => {

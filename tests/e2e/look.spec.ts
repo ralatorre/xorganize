@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { buildPath, expect, test } from './fixtures';
+import { buildPath, expect, openSettings, test } from './fixtures';
 
 /** SHA-256 of `web/InterVariable.woff2` in Inter 4.1, the official release, unmodified. */
 const INTER_SHA256 = '693b77d4f32ee9b8bfc995589b5fad5e99adf2832738661f5402f9978429a8e3';
@@ -107,25 +107,30 @@ test('matches the theme last seen on x.com, live, unless another is chosen', asy
 
   await seed(library);
   await expect(theme(library)).toHaveAttribute('data-theme', 'dark');
-  const setting = library.getByRole('combobox', { name: /Theme/ });
-  await expect(setting).toHaveValue('x');
+  await openSettings(library);
+  const choice = (label: string) =>
+    library.getByRole('group', { name: 'Theme' }).getByRole('radio', { name: label });
+  // A theme is chosen by clicking its card, which holds the radio button.
+  const pick = (label: string) => choice(label).locator('xpath=..').click();
+  await expect(choice('Match X')).toBeChecked();
 
-  await setting.selectOption({ label: 'Light' });
+  await pick('Light');
   await expect(theme(library)).toHaveAttribute('data-theme', 'light');
   expect(await background(library)).toBe('rgb(255, 255, 255)');
 
   // System follows the system as it changes.
-  await setting.selectOption({ label: 'System' });
+  await pick('System');
   await library.emulateMedia({ colorScheme: 'dark' });
   await expect(theme(library)).toHaveAttribute('data-theme', 'dark');
   await library.emulateMedia({ colorScheme: 'light' });
   await expect(theme(library)).toHaveAttribute('data-theme', 'light');
 
   // The choice is kept.
-  await setting.selectOption({ label: 'Dim' });
+  await pick('Dim');
+  await expect(theme(library)).toHaveAttribute('data-theme', 'dim');
   await library.reload();
   await expect(theme(library)).toHaveAttribute('data-theme', 'dim');
-  await expect(library.getByRole('combobox', { name: /Theme/ })).toHaveValue('dim');
+  await expect(choice('Dim')).toBeChecked();
 });
 
 test('draws its text in the packaged font, loaded from the extension itself', async ({

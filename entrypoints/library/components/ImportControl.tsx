@@ -6,6 +6,8 @@ import { useRef } from 'preact/hooks';
  */
 export function ImportControl(props: {
   label: string;
+  /** The button's classes. Small by default. */
+  buttonClass?: string;
   busy: boolean;
   status: string;
   onFile(file: File): void;
@@ -15,7 +17,7 @@ export function ImportControl(props: {
     <div class="export import">
       <button
         type="button"
-        class="button button--small"
+        class={props.buttonClass ?? 'button button--small'}
         disabled={props.busy}
         onClick={() => input.current?.click()}
       >

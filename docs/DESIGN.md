@@ -137,7 +137,7 @@ The library is one application shown in two containers:
 - **Full tab** (`library.html`), opened from the toolbar popup or a shortcut. The primary view.
 - **Side panel**, a narrow single-column version docked beside x.com. Chromium only.
 
-> **As first built:** the library predates the look described here and in section 7. Settings sit at the bottom of the sidebar, the controls above the list are a loose row of text, selects and buttons, the card's actions are an "Open on X" link and an inline `⋯` row, a tag's panel opens inside the sidebar, Remove from library asks for confirmation, results are reported beside the button that caused them, and below 720 px the sidebar stacks above the list. Since the first part of M5, it already has the colours, type, buttons, icons and styled controls described in section 7, in all three themes. Milestone M5, Look and feel (SPEC 17), brings it to this section.
+> **As first built:** the library predates the look described here and in section 7. Settings sit at the bottom of the sidebar, the controls above the list are a loose row of text, selects and buttons, the card's actions are an "Open on X" link and an inline `⋯` row, a tag's panel opens inside the sidebar, Remove from library asks for confirmation, results are reported beside the button that caused them, and below 720 px the sidebar stacks above the list. Since the first part of M5, it has the colours, type, buttons, icons and styled controls described in section 7, in all three themes. Since the second, it has the header bar with the account menu, `?` and the gear, the Settings page, a sidebar of sources and tags only, the 720 px list column, and the narrow layout with source pills and the filter sheet; narrow cards are not denser yet. Milestone M5, Look and feel (SPEC 17), brings the rest to this section.
 
 Full tab layout:
 
@@ -162,7 +162,7 @@ Full tab layout:
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Header bar**, across the top: the extension's mark and name; the search box, with `/` shown as its shortcut; `?` for the keyboard shortcuts; the gear for Settings (4.7); and the X account shown, as a menu that switches between the accounts this browser holds (6).
+**Header bar**, across the top: the extension's mark and name; the search box, with `/` shown as its shortcut; `?` for the keyboard shortcuts; the gear for Settings (4.7); and the X account shown, as a menu that switches between the accounts this browser holds (6). An account is named by its @handle, as last seen on x.com, and by the end of its ID until then.
 
 **Width.** The page is centred, at most 1180 px wide: a 236 px sidebar and a list column of at most 720 px, so post text stays near X's own line length. Below 720 px the side panel layout below takes over.
 
@@ -265,7 +265,7 @@ Settings is a page of the library, opened from the gear in its header, with "Bac
 - **Theme.** Match X uses the theme last seen on x.com: Light, Dim or Dark. Until x.com has been visited, it follows the system. System follows the system's light or dark setting. The tag button and popover on x.com always follow X, whatever the library uses.
 - The Danger zone panel has a red-tinted border, and its button is outlined in red. "Delete all data…" opens a dialog that says what goes and what stays: every post, tag and tag assignment, for every X account in this browser; settings stay, so that a choice such as not loading images from X is not undone; nothing on X changes. Its button stays disabled until "delete" is typed, in any case. Cancel has focus first. Afterwards the library shows its empty state, from which a backup can be restored.
 
-> **As first built:** until the Settings page (M5, Look and feel), settings are under Settings at the bottom of the library's sidebar: "Show images from X", "Export library" (JSON backup or CSV), "Import backup", "Backup reminder" and "Delete all data…". Theme is a select there, without previews. The Capture, Library and Shortcuts rows come with M6 and M7. The backup reminder shows in the library only until the popup (M7).
+> **As first built:** the Settings page has the Appearance, Privacy, Backup and restore, and Danger zone groups. Match X and System preview the two themes they most often choose between, side by side. The result of a backup or export is reported beside its button until the toasts (M5, part 4). The Capture, Library and Shortcuts rows come with M6 and M7. The backup reminder shows in the library only until the popup (M7).
 
 ## 5. Key flows
 

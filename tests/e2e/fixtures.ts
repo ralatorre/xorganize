@@ -1,4 +1,10 @@
-import { test as base, chromium, type BrowserContext, type Worker } from '@playwright/test';
+import {
+  test as base,
+  chromium,
+  type BrowserContext,
+  type Page,
+  type Worker,
+} from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
 export type Build = 'chrome-mv3' | 'chrome-mv3-diagnostics';
@@ -41,3 +47,15 @@ export const test = base.extend<ExtensionFixtures>({
 });
 
 export const expect = test.expect;
+
+/** Goes to the library's Settings, from the gear in its header. */
+export async function openSettings(page: Page): Promise<void> {
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+}
+
+/** Goes back from Settings to the list. */
+export async function backToLibrary(page: Page): Promise<void> {
+  await page.getByRole('link', { name: 'Back to library' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toHaveCount(0);
+}

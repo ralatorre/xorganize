@@ -22,6 +22,7 @@ import {
   readXTheme,
   savedIds,
   sourceIds,
+  storedAccounts,
   taggedIds,
 } from '@/src/db/repo';
 import type { LibraryDatabase } from '@/src/db/schema';
@@ -32,6 +33,7 @@ import type {
   BackupTimes,
   PostId,
   Settings,
+  StoredAccount,
   TagId,
   TagSuggestion,
 } from '@/src/db/types';
@@ -56,6 +58,8 @@ export interface Catalogue {
   settings: Settings;
   /** The theme last seen on x.com, for Match X. */
   xTheme: Theme | undefined;
+  /** Every account this browser holds something for. */
+  accounts: readonly StoredAccount[];
   /** Each timeline's posts in its own order, newest first. */
   bookmarks: readonly PostId[];
   likes: readonly PostId[];
@@ -77,6 +81,7 @@ export const EMPTY_CATALOGUE: Catalogue = {
   account: undefined,
   settings: DEFAULT_SETTINGS,
   xTheme: undefined,
+  accounts: [],
   bookmarks: [],
   likes: [],
   saved: [],
@@ -88,12 +93,13 @@ export const EMPTY_CATALOGUE: Catalogue = {
 };
 
 export async function loadCatalogue(db: LibraryDatabase): Promise<Catalogue> {
-  const [account, settings, xTheme] = await Promise.all([
+  const [account, settings, xTheme, accounts] = await Promise.all([
     activeAccount(db),
     readSettings(db),
     readXTheme(db),
+    storedAccounts(db),
   ]);
-  if (account === undefined) return { ...EMPTY_CATALOGUE, settings, xTheme };
+  if (account === undefined) return { ...EMPTY_CATALOGUE, settings, xTheme, accounts };
 
   return db.transaction('r', db.posts, db.tags, db.postTags, db.meta, async () => {
     const [bookmarks, likes, tagged, saved, tags, backup] = await Promise.all([
@@ -113,6 +119,7 @@ export async function loadCatalogue(db: LibraryDatabase): Promise<Catalogue> {
       account,
       settings,
       xTheme,
+      accounts,
       bookmarks,
       likes,
       saved,

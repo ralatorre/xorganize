@@ -2,10 +2,11 @@
  * Every read and write of the library goes through here.
  */
 
-import Dexie from 'dexie';
+import Dexie, { type Table } from 'dexie';
 import type { CapturedPost } from '@/src/capture/normalise';
 import type { SourceKind } from '@/src/capture/operations';
 import { isTheme, type Theme } from '@/src/dom/theme';
+import { isHandle } from '@/src/guards';
 import type { LibraryDatabase } from './schema';
 import type {
   AccountId,
@@ -13,6 +14,7 @@ import type {
   Counts,
   PostId,
   Settings,
+  StoredAccount,
   StoredPost,
   ThemeSetting,
 } from './types';
@@ -34,6 +36,7 @@ const SETTINGS = 'settings';
 const LAST_BACKUP = 'lastBackupAt';
 const REMINDER_DISMISSED = 'backupReminderDismissedAt';
 const X_THEME = 'xTheme';
+const HANDLE = 'handle';
 
 /** How often the backup reminder can be set to come back, in days. 0 turns it off. */
 export const BACKUP_REMINDER_DAYS = [7, 30, 90, 0] as const;
@@ -360,6 +363,30 @@ export function rememberAccount(db: LibraryDatabase, accountId: AccountId): Prom
   return db.meta.put({ accountId: '', key: ACTIVE_ACCOUNT, value: accountId });
 }
 
+/**
+ * Shows an account's library, as if it had just stored something. Only an
+ * account that holds something here can be chosen.
+ */
+export function chooseAccount(db: LibraryDatabase, accountId: AccountId): Promise<boolean> {
+  return db.transaction('rw', db.posts, db.tags, db.meta, async () => {
+    const [post, tag] = await Promise.all([
+      db.posts
+        .where(':id')
+        .between(...allOf(accountId))
+        .limit(1)
+        .primaryKeys(),
+      db.tags
+        .where(':id')
+        .between(...allOf(accountId))
+        .limit(1)
+        .primaryKeys(),
+    ]);
+    if (post.length + tag.length === 0) return false;
+    await rememberAccount(db, accountId);
+    return true;
+  });
+}
+
 /** The account that most recently stored something, if any has. */
 export async function activeAccount(db: LibraryDatabase): Promise<AccountId | undefined> {
   const row = await db.meta.get(['', ACTIVE_ACCOUNT]);
@@ -418,6 +445,75 @@ export function recordBackup(db: LibraryDatabase, accountId: AccountId, time: nu
 export function dismissBackupReminder(db: LibraryDatabase, accountId: AccountId, time: number) {
   return db.meta.put({ accountId, key: REMINDER_DISMISSED, value: time });
 }
+
+/**
+ * Keeps the @handle x.com shows for an account, for the library's header.
+ * Written only when it differs, so that an open library does not re-read
+ * for nothing.
+ */
+export function recordHandle(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  handle: string,
+): Promise<void> {
+  return db.transaction('rw', db.meta, async () => {
+    const row = await db.meta.get([accountId, HANDLE]);
+    if (row?.value !== handle) await db.meta.put({ accountId, key: HANDLE, value: handle });
+  });
+}
+
+/** The accounts in one table, in order, found by skipping from one account to the next. */
+async function accountsIn<Row>(table: Table<Row, [AccountId, string]>): Promise<AccountId[]> {
+  const accounts: AccountId[] = [];
+  let next = await table.toCollection().limit(1).primaryKeys();
+  while (next[0]) {
+    const [accountId] = next[0];
+    accounts.push(accountId);
+    next = await table.where(':id').above([accountId, Dexie.maxKey]).limit(1).primaryKeys();
+  }
+  return accounts;
+}
+
+/**
+ * Every account this browser holds posts or tags for, with how much it holds
+ * and its @handle when known, in the order of their IDs.
+ */
+export function storedAccounts(db: LibraryDatabase): Promise<StoredAccount[]> {
+  return db.transaction('r', db.posts, db.tags, db.postTags, db.meta, async () => {
+    const found = await Promise.all([accountsIn(db.posts), accountsIn(db.tags)]);
+    const accounts = [...new Set(found.flat())].sort(byId);
+    return Promise.all(
+      accounts.map(async (accountId) => {
+        const range = allOf(accountId);
+        const [posts, tags, assignments, handle] = await Promise.all([
+          db.posts
+            .where(':id')
+            .between(...range)
+            .count(),
+          db.tags
+            .where(':id')
+            .between(...range)
+            .count(),
+          db.postTags
+            .where('[accountId+postId]')
+            .between(...range)
+            .count(),
+          db.meta.get([accountId, HANDLE]),
+        ]);
+        return {
+          accountId,
+          ...(isHandle(handle?.value) ? { handle: handle.value } : {}),
+          posts,
+          tags,
+          assignments,
+        };
+      }),
+    );
+  });
+}
+
+/** Numeric IDs as strings, in numeric order. */
+const byId = (a: string, b: string) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
 
 /** What the backup reminder needs. Times that are not numbers are left out. */
 export async function backupTimes(db: LibraryDatabase, accountId: AccountId): Promise<BackupTimes> {

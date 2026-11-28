@@ -7,7 +7,7 @@
  * API has moved a field before, the older location is still tried.
  */
 
-import { httpsUrl, isId, isRecord } from '@/src/guards';
+import { httpsUrl, isHandle, isId, isRecord } from '@/src/guards';
 
 export interface CapturedMedia {
   kind: 'photo' | 'video' | 'gif';
@@ -45,7 +45,6 @@ const MAX_NAME = 100;
 const MAX_ALT = 2_000;
 const MAX_MEDIA = 10;
 const MAX_LINKS = 30;
-const HANDLE = /^[A-Za-z0-9_]{1,20}$/;
 const LANG = /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/;
 
 /** A post result with the visibility wrapper removed, if there is one. */
@@ -98,7 +97,7 @@ export function normalisePost(result: unknown): CapturedPost | undefined {
 export function isCapturedPost(value: unknown): value is CapturedPost {
   if (!isRecord(value) || !isId(value.id)) return false;
   const { author, media, links } = value;
-  if (!isRecord(author) || typeof author.handle !== 'string' || !HANDLE.test(author.handle)) {
+  if (!isRecord(author) || !isHandle(author.handle)) {
     return false;
   }
   return (
@@ -141,7 +140,7 @@ function authorOf(raw: Record<string, unknown>): CapturedPost['author'] | undefi
   const avatar = isRecord(user.avatar) ? user.avatar : {};
 
   const handle = core.screen_name ?? legacy.screen_name;
-  if (typeof handle !== 'string' || !HANDLE.test(handle)) return undefined;
+  if (!isHandle(handle)) return undefined;
   const avatarUrl = httpsUrl(avatar.image_url ?? legacy.profile_image_url_https);
 
   return {

@@ -1,5 +1,6 @@
 import type { TagSuggestion } from '@/src/db/types';
 import type { TagMatch, ViewChange } from '@/src/library/view';
+import { MatchSwitch } from './MatchSwitch';
 import { TagChip } from './TagChip';
 
 /** The selected tags, each removable, and with more than one, whether all or any must match. */
@@ -21,21 +22,7 @@ export function FilterBar(props: {
           onRemove={() => onChange({ type: 'untag', tagId: tag.id })}
         />
       ))}
-      {selected.length > 1 ? (
-        <fieldset class="segmented filters__match" aria-label="Match">
-          {(['all', 'any'] as const).map((option) => (
-            <label key={option}>
-              <input
-                type="radio"
-                name="match"
-                checked={match === option}
-                onChange={() => onChange({ type: 'match', match: option })}
-              />
-              {option === 'all' ? 'All tags' : 'Any tag'}
-            </label>
-          ))}
-        </fieldset>
-      ) : null}
+      {selected.length > 1 ? <MatchSwitch match={match} name="match" onChange={onChange} /> : null}
     </div>
   );
 }

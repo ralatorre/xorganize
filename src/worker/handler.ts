@@ -63,6 +63,8 @@ export interface WorkerDependencies {
   tags: TagStore;
   /** Keeps the theme x.com shows, for the library's Match X. */
   recordTheme(theme: Theme): Promise<unknown>;
+  /** Keeps the @handle x.com shows for an account, for the library's header. */
+  recordHandle(accountId: string, handle: string): Promise<unknown>;
   /** Tells every listening page that a post's tags changed. */
   notify(message: TagsChangedMessage): void;
   /** Present only in the diagnostics build. Without it, diagnostics messages are ignored. */
@@ -87,8 +89,12 @@ export function createWorkerHandler(deps: WorkerDependencies) {
 
     if (message.type === 'content/ready') return Promise.resolve({ ok: true });
 
-    if (message.type === 'theme/seen') {
-      return deps.recordTheme(message.theme).then(
+    if (message.type === 'theme/seen' || message.type === 'account/seen') {
+      const recorded =
+        message.type === 'theme/seen'
+          ? deps.recordTheme(message.theme)
+          : deps.recordHandle(message.accountId, message.handle);
+      return recorded.then(
         () => ({ ok: true }),
         () => ({ ok: false }),
       );

@@ -256,6 +256,7 @@ test.describe('diagnostics build', () => {
           removeBookmarkButton: 0,
           likeButton: 0,
           unlikeButton: 0,
+          profileLink: 0,
         },
       },
     ]);

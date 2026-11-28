@@ -17,7 +17,7 @@ function block(selector: string): Record<string, string> {
 
 const tokensOf = (theme: Theme) => ({
   ...block(':root'),
-  ...block(`:root[data-theme='${theme}']`),
+  ...block(`[data-theme='${theme}']`),
 });
 
 function luminance(hex: string): number {
@@ -77,8 +77,8 @@ describe.each(THEMES)('the %s theme', (theme) => {
   });
 
   it('defines the same tokens as the other themes', () => {
-    expect(Object.keys(block(`:root[data-theme='${theme}']`)).sort()).toEqual(
-      Object.keys(block(":root[data-theme='light']")).sort(),
+    expect(Object.keys(block(`[data-theme='${theme}']`)).sort()).toEqual(
+      Object.keys(block("[data-theme='light']")).sort(),
     );
   });
 });

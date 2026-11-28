@@ -44,6 +44,7 @@ function setup(outcome: 'stored' | 'failed' = 'stored') {
   const changes: TagChange[] = [];
   const notified: TagsChangedMessage[] = [];
   const themes: Theme[] = [];
+  const handles: string[] = [];
   const result = <T>(value: T) =>
     outcome === 'stored' ? Promise.resolve(value) : Promise.reject(new Error('quota'));
   const handle = createWorkerHandler({
@@ -60,9 +61,13 @@ function setup(outcome: 'stored' | 'failed' = 'stored') {
       set: (change) => (changes.push(change), result([RUST])),
     },
     recordTheme: (theme) => (themes.push(theme), result(undefined)),
+    recordHandle: (accountId, handle) => (
+      handles.push(`${accountId} ${handle}`),
+      result(undefined)
+    ),
     notify: (message) => void notified.push(message),
   });
-  return { handle, saved, cleared, changes, notified, themes };
+  return { handle, saved, cleared, changes, notified, themes, handles };
 }
 
 describe('createWorkerHandler', () => {
@@ -96,6 +101,18 @@ describe('createWorkerHandler', () => {
 
   it('says so when the theme cannot be kept, without rejecting', async () => {
     const message = { type: 'theme/seen', theme: 'dark' };
+    expect(await setup('failed').handle(message, FROM_X)).toEqual({ ok: false });
+  });
+
+  it('keeps the handle x.com shows for an account, for the library', async () => {
+    const { handle, handles } = setup();
+    const message = { type: 'account/seen', accountId: '9000000000000000001', handle: 'some_one' };
+    expect(await handle(message, FROM_X)).toEqual({ ok: true });
+    expect(handles).toEqual(['9000000000000000001 some_one']);
+  });
+
+  it('says so when the handle cannot be kept, without rejecting', async () => {
+    const message = { type: 'account/seen', accountId: '9000000000000000001', handle: 'some_one' };
     expect(await setup('failed').handle(message, FROM_X)).toEqual({ ok: false });
   });
 

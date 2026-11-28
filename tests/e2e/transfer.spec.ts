@@ -1,6 +1,6 @@
 import { chromium, type Download, type Page } from '@playwright/test';
 import { readFile, writeFile } from 'node:fs/promises';
-import { buildPath, expect, test } from './fixtures';
+import { backToLibrary, buildPath, expect, openSettings, test } from './fixtures';
 
 const VIEWER = '9000000000000000001';
 const DAY = Date.UTC(2026, 0, 2);
@@ -84,6 +84,15 @@ async function openLibrary(page: Page, extensionId: string) {
   await expect(page.locator('.posts .post__text')).toHaveCount(3);
 }
 
+/** Saves what a button in Settings exports. */
+async function save(page: Page, button: string): Promise<Download> {
+  const [file] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: button }).click(),
+  ]);
+  return file;
+}
+
 async function download(page: Page, group: string, format: string): Promise<Download> {
   const [file] = await Promise.all([
     page.waitForEvent('download'),
@@ -133,7 +142,11 @@ test('exports the view and the whole library, as JSON and CSV', async ({
   expect(rows[1]).toContain(`,bookmark,recipes;rust,"'=HYPERLINK(""https://example.com"")",`);
 
   // The whole library, from Settings: a full backup, unused tags included.
-  const backup = await download(page, 'Export library', 'JSON backup');
+  await openSettings(page);
+  await expect(page.getByText('Never backed up.')).toBeVisible();
+  const backup = await save(page, 'Back up now');
+  await expect(page.getByText('Exported 3 posts')).toBeVisible();
+  await expect(page.getByText('Last backed up today.')).toBeVisible();
   expect(backup.suggestedFilename()).toMatch(/^xorganize-export-\d{4}-\d{2}-\d{2}\.json$/);
   const backupJson = JSON.parse(await contents(backup));
   expect(backupJson).not.toHaveProperty('scope');
@@ -173,13 +186,14 @@ const records = (text: string) => {
 test('a backup restores the library in a clean profile', async ({ context, extensionId }, info) => {
   const page = await context.newPage();
   await openLibrary(page, extensionId);
-  const backupPath = info.outputPath('backup.json');
-  const original = await contents(await download(page, 'Export library', 'JSON backup'));
-  await writeFile(backupPath, original);
   const viewPath = info.outputPath('view.json');
   await (await download(page, 'Export view', 'JSON')).saveAs(viewPath);
+  await openSettings(page);
+  const backupPath = info.outputPath('backup.json');
+  const original = await contents(await save(page, 'Back up now'));
+  await writeFile(backupPath, original);
   const csvPath = info.outputPath('library.csv');
-  await (await download(page, 'Export library', 'CSV')).saveAs(csvPath);
+  await (await save(page, 'Export CSV')).saveAs(csvPath);
 
   // Another browser profile, with nothing in it.
   const path = buildPath('chrome-mv3');
@@ -213,25 +227,26 @@ test('a backup restores the library in a clean profile', async ({ context, exten
     await expect(
       restored.getByRole('region', { name: 'Tags' }).getByRole('button', { name: /^recipes 2$/ }),
     ).toBeVisible();
-    await expect(restored.getByRole('group', { name: 'Export library' })).toBeVisible();
 
     // What it exports again is what was backed up.
-    const again = await contents(await download(restored, 'Export library', 'JSON backup'));
+    await openSettings(restored);
+    const again = await contents(await save(restored, 'Back up now'));
     expect(records(again)).toEqual(records(original));
 
     // A view's file can be merged, never used to replace the library.
-    await pick(restored, 'Import backup', viewPath);
+    await pick(restored, 'Choose a file…', viewPath);
     await expect(preview).toContainText('only be merged');
     await expect(preview.getByRole('button', { name: 'Replace' })).toHaveCount(0);
     await preview.getByRole('button', { name: 'Cancel' }).click();
     await expect(preview).toBeHidden();
 
     // Replace, with the full backup, leaves the same library.
-    await pick(restored, 'Import backup', backupPath);
+    await pick(restored, 'Choose a file…', backupPath);
     await expect(preview).toContainText('deletes');
     await preview.getByRole('button', { name: 'Replace' }).click();
     await expect(preview).toBeHidden();
     await expect(restored.getByText('Imported 3 posts and 3 tags')).toBeVisible();
+    await backToLibrary(restored);
     await expect(restored.locator('.posts .post__text')).toHaveCount(3);
 
     expect(violations).toEqual([]);
@@ -300,8 +315,10 @@ test('reminds of a backup until one is made, put off, or turned off', async ({
   // Written past Dexie, so the page reads it again only on reload.
   await page.reload();
   await expect(reminder).toBeVisible();
-  await download(page, 'Export library', 'CSV');
   await download(page, 'Export view', 'JSON');
+  await openSettings(page);
+  await save(page, 'Export CSV');
+  await backToLibrary(page);
   await expect(reminder).toBeVisible();
 
   // Put off: gone, and still gone after a reload.
@@ -312,11 +329,12 @@ test('reminds of a backup until one is made, put off, or turned off', async ({
   await expect(reminder).toBeHidden();
 
   // Turned off: the setting is kept.
-  const setting = page.getByRole('combobox', { name: /Backup reminder/ });
+  await openSettings(page);
+  const setting = page.getByRole('combobox', { name: 'Backup reminder' });
   await expect(setting).toHaveValue('30');
   await setting.selectOption({ label: 'Never' });
   await page.reload();
-  await expect(page.getByRole('combobox', { name: /Backup reminder/ })).toHaveValue('0');
+  await expect(page.getByRole('combobox', { name: 'Backup reminder' })).toHaveValue('0');
 });
 
 test('deletes all data once the word is typed, keeping settings', async ({
@@ -325,7 +343,8 @@ test('deletes all data once the word is typed, keeping settings', async ({
 }) => {
   const page = await context.newPage();
   await openLibrary(page, extensionId);
-  await page.getByRole('switch', { name: /Show images from X/ }).uncheck();
+  await openSettings(page);
+  await page.getByRole('switch', { name: 'Show images from X' }).uncheck();
 
   await page.getByRole('button', { name: 'Delete all data…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete all data?' });
@@ -337,7 +356,7 @@ test('deletes all data once the word is typed, keeping settings', async ({
   // Cancelled: nothing changes.
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.locator('.posts .post__text')).toHaveCount(3);
+  expect(await rows(page, 'posts')).toHaveLength(3);
 
   await page.getByRole('button', { name: 'Delete all data…' }).click();
   const input = dialog.getByRole('textbox', { name: 'Type “delete” to confirm' });

@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { DIAGNOSTICS } from '@/src/build';
-import { dismissBackupReminder, updateSettings } from '@/src/db/repo';
+import { chooseAccount, dismissBackupReminder, updateSettings } from '@/src/db/repo';
 import { library } from '@/src/db/schema';
 import type { AccountId, PostId, ThemeSetting } from '@/src/db/types';
 import type { Theme } from '@/src/dom/theme';
@@ -12,6 +12,7 @@ import { createLibraryExport } from '@/src/library/exporter';
 import { createLibraryImport } from '@/src/library/importer';
 import { loadPosts } from '@/src/library/posts';
 import { createLibraryTagging } from '@/src/library/tagging';
+import { pageOf } from '@/src/library/route';
 import { themeFor } from '@/src/library/theme';
 import { TAGS_CHANNEL, type TagsEditedNotice } from '@/src/messaging/protocol';
 import { createSearchClient } from '@/src/search/client';
@@ -19,6 +20,7 @@ import type { ExportedFile } from '@/src/transfer/export';
 import { createPopover } from '@/src/ui/popover';
 import { App } from './App';
 import { Diagnostics } from './Diagnostics';
+import type { Pages } from './use-page';
 import type { ColourScheme } from './use-theme';
 import './tokens.css';
 import './style.css';
@@ -38,6 +40,34 @@ const setBackupReminder = (days: number) => void updateSettings(db, { backupRemi
 const setTheme = (theme: ThemeSetting) => void updateSettings(db, { theme });
 const dismissReminder = (accountId: AccountId) =>
   void dismissBackupReminder(db, accountId, Date.now());
+const showAccount = (accountId: AccountId) => void chooseAccount(db, accountId);
+
+// The page shown is in the address, so Back returns from Settings to the
+// list. Moving between the two starts at the top.
+const pages: Pages = {
+  current: () => pageOf(location.hash),
+  watch: (onChange) => {
+    let shown = pageOf(location.hash);
+    const listener = () => {
+      const next = pageOf(location.hash);
+      if (next !== shown) window.scrollTo(0, 0);
+      shown = next;
+      onChange();
+    };
+    window.addEventListener('hashchange', listener);
+    return () => window.removeEventListener('hashchange', listener);
+  },
+  open: (page) => {
+    location.hash = page === 'settings' ? '#settings' : '';
+  },
+};
+
+// Settings says how much the library takes up. The browser's estimate needs no permission.
+const measureStorage = () =>
+  navigator.storage.estimate().then(
+    ({ usage }) => usage,
+    () => undefined,
+  );
 
 const channel = new BroadcastChannel(TAGS_CHANNEL);
 const announce = (accountId: AccountId) =>
@@ -114,6 +144,9 @@ if (root) {
       colourScheme={colourScheme}
       applyTheme={applyTheme}
       dismissBackupReminder={dismissReminder}
+      chooseAccount={showAccount}
+      pages={pages}
+      measureStorage={measureStorage}
       now={Date.now}
     >
       {DIAGNOSTICS ? <Diagnostics store={createDiagnosticsStore(indexedDB)} /> : null}
