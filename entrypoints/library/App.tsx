@@ -9,7 +9,13 @@ import { summaryOf } from '@/src/library/format';
 import { IDLE, changeImport, isBusy, type ImportEvent } from '@/src/library/import-flow';
 import { previewLines } from '@/src/library/import-messages';
 import type { LibraryImport } from '@/src/library/importer';
-import { deletionImpact, deletionMessage } from '@/src/library/tag-actions';
+import {
+  createProblem,
+  deletionImpact,
+  deletionMessage,
+  renameProblem,
+} from '@/src/library/tag-actions';
+import { groupCounts, tagTree } from '@/src/library/tag-tree';
 import { DEFAULT_VIEW, changeView, type SourceFilter } from '@/src/library/view';
 import { backupMessage, exportMessage, viewScope } from '@/src/library/view-export';
 import { isBackup, type LibraryExport } from '@/src/library/exporter';
@@ -30,6 +36,7 @@ import { FilterSheet } from './components/FilterSheet';
 import { Header } from './components/Header';
 import { ImportControl } from './components/ImportControl';
 import { ImportDialog } from './components/ImportDialog';
+import { MergeTagDialog } from './components/MergeTagDialog';
 import { NoMatches } from './components/NoMatches';
 import type { PostActions } from './components/PostCard';
 import { PostList } from './components/PostList';
@@ -41,7 +48,8 @@ import { Toasts } from './components/Toasts';
 import { Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
 import { SourcePills } from './components/SourcePills';
-import type { TagManagement } from './components/TagManager';
+import type { TagActions } from './components/TagList';
+import { TagNameDialog } from './components/TagNameDialog';
 import type { PostNavigation } from './use-post-navigation';
 import type { LoadPosts } from './use-post-views';
 import { useLiveQuery } from './use-live-query';
@@ -96,6 +104,9 @@ export interface LibraryProps {
 
 /** A question the library is asking, or the shortcut list. */
 type Dialog =
+  | { kind: 'new-tag' }
+  | { kind: 'rename-tag'; tag: TagSuggestion }
+  | { kind: 'merge-tag'; tag: TagSuggestion }
   | { kind: 'delete-tag'; tag: TagSuggestion }
   | { kind: 'delete-all' }
   | { kind: 'shortcuts' }
@@ -161,6 +172,12 @@ export function App(props: LibraryProps) {
     [authorOrder, byAuthors, account],
   );
   const byAuthor = useLiveQuery(readAuthors, undefined);
+
+  // The sidebar's tree changes only with the library, not with each view.
+  const sidebarTags = useMemo(() => {
+    const tree = tagTree(library?.tags ?? []);
+    return { tree, groupCounts: groupCounts(tree, library?.tagged ?? new Map()) };
+  }, [library]);
 
   const matches = text.state === 'done' ? text.ids : undefined;
   const state = useMemo(
@@ -284,10 +301,11 @@ export function App(props: LibraryProps) {
     );
   }
 
-  const manage: TagManagement = {
-    rename: (tagId, name) => edits.rename(accountId, tagId, name),
-    recolour: (tagId, colour) => void edits.recolour(accountId, tagId, colour),
-    merge: (fromId, intoId) => void edits.merge(accountId, fromId, intoId),
+  const tagActions: TagActions = {
+    create: () => setDialog({ kind: 'new-tag' }),
+    rename: (tag) => setDialog({ kind: 'rename-tag', tag }),
+    recolour: (tag, colour) => void edits.recolour(accountId, tag.id, colour),
+    merge: (tag) => setDialog({ kind: 'merge-tag', tag }),
     remove: (tag) => setDialog({ kind: 'delete-tag', tag }),
   };
   const actions: PostActions = {
@@ -331,9 +349,11 @@ export function App(props: LibraryProps) {
         <Sidebar
           counts={state.counts}
           tags={state.tags}
+          tree={sidebarTags.tree}
+          groupCounts={sidebarTags.groupCounts}
           view={view}
           onChange={change}
-          manage={manage}
+          actions={tagActions}
         />
         <main class="content">
           <SourcePills counts={state.counts} selected={view.source} onSelect={pickSource} />
@@ -392,6 +412,39 @@ export function App(props: LibraryProps) {
           match={view.match}
           count={state.ids.length}
           onChange={change}
+          onClose={closeDialog}
+        />
+      ) : dialog?.kind === 'new-tag' ? (
+        <TagNameDialog
+          title="New tag"
+          save="Create tag"
+          onSave={(name) =>
+            edits
+              .createTag(accountId, name)
+              .then((result) => (result.ok ? undefined : createProblem(result.problem)))
+          }
+          onClose={closeDialog}
+        />
+      ) : dialog?.kind === 'rename-tag' ? (
+        <TagNameDialog
+          title={`Rename “${dialog.tag.name}”`}
+          name={dialog.tag.name}
+          save="Rename"
+          onSave={(name) =>
+            edits
+              .rename(accountId, dialog.tag.id, name)
+              .then((result) => (result.ok ? undefined : renameProblem(result.problem)))
+          }
+          onClose={closeDialog}
+        />
+      ) : dialog?.kind === 'merge-tag' ? (
+        <MergeTagDialog
+          tag={dialog.tag}
+          others={state.tags.filter((other) => other.id !== dialog.tag.id)}
+          onMerge={(intoId) => {
+            void edits.merge(accountId, dialog.tag.id, intoId);
+            closeDialog();
+          }}
           onClose={closeDialog}
         />
       ) : dialog?.kind === 'delete-tag' ? (

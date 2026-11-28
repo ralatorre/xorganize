@@ -1,17 +1,20 @@
 import type { TagSuggestion } from '@/src/db/types';
 import type { SourceCounts } from '@/src/library/select';
+import type { TagNode } from '@/src/library/tag-tree';
 import type { View, ViewChange } from '@/src/library/view';
 import { SourceList } from './SourceList';
-import { TagList } from './TagList';
-import type { TagManagement } from './TagManager';
+import { TagList, type TagActions } from './TagList';
 
 /** Sources and tags, which choose what the list shows (DESIGN, 4.5). */
 export function Sidebar(props: {
   counts: SourceCounts;
   tags: readonly TagSuggestion[];
+  /** The tags as the sidebar lists them, with the posts in each group. */
+  tree: readonly TagNode[];
+  groupCounts: ReadonlyMap<string, number>;
   view: View;
   onChange(change: ViewChange): void;
-  manage: TagManagement;
+  actions: TagActions;
 }) {
   const { onChange } = props;
   return (
@@ -23,9 +26,11 @@ export function Sidebar(props: {
       />
       <TagList
         tags={props.tags}
-        selected={props.view.tags}
-        onSelect={(tagId, add) => onChange({ type: 'tag', tagId, add })}
-        manage={props.manage}
+        tree={props.tree}
+        groupCounts={props.groupCounts}
+        view={props.view}
+        onChange={onChange}
+        actions={props.actions}
       />
     </nav>
   );

@@ -3,6 +3,9 @@
  * the arrows wrap round, Home and End go to either end.
  */
 
+/** Space between a menu and its button, and from the window's edges. */
+export const MENU_GAP = 6;
+
 /** The item to focus after `key`, from `current` (-1: none yet). Undefined: the key is not for moving. */
 export function menuIndex(current: number, key: string, count: number): number | undefined {
   if (count === 0) return undefined;

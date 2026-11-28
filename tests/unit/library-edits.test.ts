@@ -7,7 +7,13 @@ import type { TagSummary } from '@/src/db/types';
 import { createLibraryEdits, type LibraryEdits } from '@/src/library/edits';
 import { POPOVER_SUGGESTIONS } from '@/src/inline/popover-model';
 import type { TagState } from '@/src/inline/tag-state';
-import { deletionImpact, deletionMessage, renameProblem } from '@/src/library/tag-actions';
+import {
+  createProblem,
+  deletionImpact,
+  deletionMessage,
+  mergeMessage,
+  renameProblem,
+} from '@/src/library/tag-actions';
 import { createLibraryTagging } from '@/src/library/tagging';
 import { rawPost } from '../fixtures/posts';
 
@@ -42,13 +48,14 @@ beforeEach(async () => {
 describe('createLibraryEdits', () => {
   it('announces each write that changed something, for the account it changed', async () => {
     await edits.setTags(ACCOUNT, '1', { add: ['new'], remove: [] });
+    await edits.createTag(ACCOUNT, 'unused');
     await edits.rename(ACCOUNT, 'tag-1', 'Rust');
     await edits.recolour(ACCOUNT, 'tag-1', 3);
     await edits.merge(ACCOUNT, 'tag-2', 'tag-1');
     await edits.deleteTag(ACCOUNT, 'tag-1');
     const removed = await edits.removePost(ACCOUNT, '1');
     await edits.restorePost(removed!);
-    expect(announced).toEqual(Array(7).fill(ACCOUNT));
+    expect(announced).toEqual(Array(8).fill(ACCOUNT));
   });
 
   it('announces nothing when the post to remove is not there', async () => {
@@ -60,6 +67,7 @@ describe('createLibraryEdits', () => {
     await edits.tagsOf(ACCOUNT, ['1']);
     await edits.suggest(ACCOUNT, 'ru', 5);
     await edits.rename(ACCOUNT, 'tag-1', 'go');
+    await edits.createTag(ACCOUNT, 'GO');
     await edits.recolour(ACCOUNT, 'tag-1', 99);
     await edits.merge(ACCOUNT, 'tag-1', 'tag-1');
     expect(announced).toEqual([]);
@@ -187,5 +195,26 @@ describe('renameProblem', () => {
       expect(renameProblem(problem)).toMatch(/\.$/);
     }
     expect(renameProblem('taken')).toContain('Merge');
+  });
+});
+
+describe('createProblem', () => {
+  it('says a name in use is taken, and otherwise explains as for a rename', () => {
+    expect(createProblem('taken')).toBe('A tag with that name already exists.');
+    expect(createProblem('empty')).toBe(renameProblem('empty'));
+  });
+});
+
+describe('mergeMessage', () => {
+  it('says how many posts move, and that the tag goes', () => {
+    expect(mergeMessage({ name: 'go', count: 0 })).toBe(
+      'No post carries “go”, so it is only removed.',
+    );
+    expect(mergeMessage({ name: 'go', count: 1 })).toBe(
+      'Its post moves to that tag, and “go” is removed.',
+    );
+    expect(mergeMessage({ name: 'go', count: 1200 })).toBe(
+      'Its 1,200 posts move to that tag, and “go” is removed.',
+    );
   });
 });

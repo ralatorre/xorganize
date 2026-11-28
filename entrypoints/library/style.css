@@ -268,12 +268,32 @@ button.account[aria-expanded='true'] {
   left: 0;
 }
 
+/* Placed by script at its button, over the page (Menu.tsx). */
+.dropdown > .dropdown__menu--floating {
+  position: fixed;
+  top: 0;
+  right: auto;
+  left: 0;
+}
+
 .dropdown__label {
   margin: 0;
   padding: 6px 10px 4px;
   color: var(--text-2);
   font-size: 12px;
   font-weight: 600;
+}
+
+.dropdown__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 6px 10px 6px;
+}
+
+.dropdown__heading > .icon {
+  color: var(--text-2);
 }
 
 .dropdown__note {
@@ -664,6 +684,8 @@ kbd {
 .sidebar {
   position: sticky;
   top: 0;
+  /* Above the list, so that a tag menu's scrim covers it. */
+  z-index: 1;
   flex: 0 0 236px;
   max-height: 100vh;
   margin-top: -24px;
@@ -690,7 +712,7 @@ kbd {
 }
 
 .sidebar ul ul {
-  padding-left: 16px;
+  padding-left: 24px;
 }
 
 .sidebar__item {
@@ -742,16 +764,46 @@ kbd {
   color: var(--text-2);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  transition: opacity var(--ease);
 }
 
 .sidebar__item[aria-pressed='true'] .sidebar__count {
   color: var(--accent-ink);
 }
 
-.sidebar__group {
-  flex: 1;
-  padding: 4px 8px;
+.sidebar__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+  margin: 0 0 4px;
+  padding: 0 3px 0 8px;
+}
+
+.sidebar__section .sidebar__heading h2 {
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar__item--group:not([aria-pressed='true']) .sidebar__label {
   color: var(--text-2);
+  font-weight: 500;
+}
+
+/* A tag no post carries. */
+.sidebar__item--unused:not([aria-pressed='true']) {
+  color: var(--text-2);
+}
+
+.sidebar__item--unused .tag-dot {
+  opacity: 0.5;
+}
+
+.sidebar__hint {
+  margin: 6px 0 0;
+  padding: 0 8px;
+  color: var(--text-2);
+  font-size: 12px;
 }
 
 .sidebar__none {
@@ -762,22 +814,29 @@ kbd {
 }
 
 .tag-row {
+  position: relative;
   display: flex;
   align-items: center;
 }
 
+/* The arrow sits where a tag's dot would, and the name follows it. */
 .tag-row__toggle {
   display: inline-grid;
   flex: none;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 28px;
+  margin-right: -4px;
   padding: 0;
   border: 0;
   border-radius: 5px;
   background: none;
   color: var(--text-3);
   cursor: pointer;
+}
+
+.tag-row__toggle + .sidebar__item {
+  padding-left: 6px;
 }
 
 .tag-row__toggle .icon {
@@ -1318,103 +1377,67 @@ kbd {
   background: color-mix(in oklab, var(--toast-text) 10%, transparent);
 }
 
+/* A tag's ⋯ takes the place of its count on hover and focus, so that counts
+   stay in one column (DESIGN, 4.5). No transform here: it would hold the
+   floating menu inside the row. */
+.tag-row > .dropdown {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+
 .tag-row__manage {
   opacity: 0;
 }
 
 .tag-row:hover .tag-row__manage,
-.tag-row__manage:focus-visible,
+.tag-row:has(:focus-visible) .tag-row__manage,
 .tag-row__manage[aria-expanded='true'] {
   opacity: 1;
 }
 
+.tag-row:has(.tag-row__manage):hover .sidebar__count,
+.tag-row:has(.tag-row__manage):has(:focus-visible) .sidebar__count,
+.tag-row:has(.tag-row__manage[aria-expanded='true']) .sidebar__count {
+  /* Not visibility, which would take the count out of the button's name. */
+  opacity: 0;
+}
+
+/* Without hover, the ⋯ always shows, and the count moves to make room. */
 @media (hover: none) {
   .tag-row__manage {
     opacity: 1;
   }
-}
 
-.manage {
-  margin: 2px 0 8px 20px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  font-size: 13px;
-}
+  .tag-row:has(.tag-row__manage) .sidebar__item {
+    padding-right: 38px;
+  }
 
-.manage__actions {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.manage__actions .button {
-  justify-content: flex-start;
-}
-
-.manage__actions .manage__danger {
-  color: var(--danger);
-}
-
-.manage__form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.manage__label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: var(--text-2);
-  font-size: 12.5px;
-  font-weight: 500;
-}
-
-.manage__note {
-  margin: 0;
-  color: var(--text-2);
-}
-
-.manage__problem {
-  margin: 0;
-  color: var(--danger);
-}
-
-.manage__buttons {
-  display: flex;
-  gap: 4px;
+  .tag-row:has(.tag-row__manage) .sidebar__count {
+    opacity: 1;
+  }
 }
 
 .swatches {
   display: grid;
   grid-template-columns: repeat(6, 24px);
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.swatches legend {
-  margin-bottom: 4px;
-  padding: 0;
+  gap: 8px;
+  padding: 2px 10px 10px 36px;
 }
 
 .swatch {
-  position: relative;
   display: block;
   width: 24px;
   height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
   cursor: pointer;
 }
 
-.swatch__input {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
+.swatch:focus-visible {
+  outline: none;
 }
 
 .swatch__colour {
@@ -1422,16 +1445,21 @@ kbd {
   width: 100%;
   height: 100%;
   border-radius: 50%;
+  transition: opacity var(--ease);
+}
+
+.swatch:hover .swatch__colour {
+  opacity: 0.8;
 }
 
 /* The chosen colour is ringed, so state is not shown by colour alone. */
-.swatch__input:checked + .swatch__colour {
+.swatch[aria-checked='true'] .swatch__colour {
   box-shadow:
-    0 0 0 2px var(--surface),
+    0 0 0 2px var(--raised),
     0 0 0 4px var(--text);
 }
 
-.swatch__input:focus-visible + .swatch__colour {
+.swatch:focus-visible .swatch__colour {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
 }
@@ -1475,6 +1503,20 @@ div.modal__message p:last-child {
 
 .modal__field {
   margin: 0 0 18px;
+}
+
+.modal__label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.modal__problem {
+  margin: -10px 0 18px;
+  color: var(--danger);
 }
 
 .modal__buttons {

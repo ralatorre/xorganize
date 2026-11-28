@@ -30,11 +30,12 @@ import {
   matchesTags,
   type SourceSets,
 } from '@/src/library/select';
-import { tagTree, type TagNode } from '@/src/library/tag-tree';
+import { groupCounts, tagTree, tagsIn, type TagNode } from '@/src/library/tag-tree';
 import {
   DEFAULT_VIEW,
   SOURCE_FILTERS,
   changeView,
+  groupChosen,
   isFiltered,
   type View,
 } from '@/src/library/view';
@@ -72,6 +73,24 @@ describe('changeView', () => {
     expect(changeView(tagged('a', 'b'), { type: 'tag', tagId: 'a', add: true }).tags).toEqual([
       'b',
     ]);
+  });
+
+  it('shows every tag of a clicked group, matching any, and clears them when clicked again', () => {
+    const group = { type: 'group', tagIds: ['b', 'c'] } as const;
+    const shown = changeView(tagged('a'), group);
+    expect(shown).toEqual({ ...DEFAULT_VIEW, tags: ['b', 'c'], match: 'any' });
+    expect(changeView(shown, group)).toEqual({ ...DEFAULT_VIEW, tags: [], match: 'any' });
+  });
+
+  it('shows a group while exactly its tags are chosen, matching any', () => {
+    const any = (...tags: string[]): View => ({ ...tagged(...tags), match: 'any' });
+    expect(groupChosen(any('c', 'b'), ['b', 'c'])).toBe(true);
+    expect(groupChosen(tagged('b', 'c'), ['b', 'c'])).toBe(false);
+    expect(groupChosen(any('b'), ['b', 'c'])).toBe(false);
+    expect(groupChosen(any('b', 'd'), ['b', 'c'])).toBe(false);
+    // With one tag, how tags match does not matter.
+    expect(groupChosen(tagged('b'), ['b'])).toBe(true);
+    expect(groupChosen(DEFAULT_VIEW, [])).toBe(false);
   });
 
   it('removes one tag, switches matching and order, and clears filters but not order', () => {
@@ -228,6 +247,33 @@ describe('tagTree', () => {
 
   it('keeps a name made only of separators as it is', () => {
     expect(shape(tagTree([tag('/')]))).toEqual(['/*']);
+  });
+
+  it('lists every tag under a node, its own first', () => {
+    const dev = tag('dev');
+    const rust = tag('dev/rust');
+    const verbs = tag('dev/fr/verbs');
+    const [node] = tagTree([rust, verbs, dev]);
+    expect(tagsIn(node!)).toEqual([dev.id, verbs.id, rust.id]);
+  });
+
+  it('counts each post once for groups without a tag of their own', () => {
+    const rust = tag('dev/rust');
+    const go = tag('dev/go');
+    const verbs = tag('lang/fr/verbs');
+    const dev = tag('dev');
+    const tree = tagTree([rust, go, verbs, tag('loose')]);
+    const tagged = new Map([
+      [rust.id, new Set(['1', '2'])],
+      [go.id, new Set(['2', '3'])],
+    ]);
+    expect([...groupCounts(tree, tagged)]).toEqual([
+      ['dev', 3],
+      ['lang', 0],
+      ['lang/fr', 0],
+    ]);
+    // A group that is also a tag shows that tag's own count instead.
+    expect([...groupCounts(tagTree([dev, rust]), tagged)]).toEqual([]);
   });
 });
 
