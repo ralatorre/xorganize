@@ -4,8 +4,11 @@ import { normalisePost, type CapturedPost } from '@/src/capture/normalise';
 import {
   activeAccount,
   chooseAccount,
+  captureChange,
+  captures,
   clearSource,
   counts,
+  lostAt,
   mergePost,
   readSettings,
   readXTheme,
@@ -128,6 +131,27 @@ describe('mergePost', () => {
     });
 
     expect(record.isBookmark).toBe(1);
+  });
+
+  it('records when the post was seen to leave a source, until it is back in it', () => {
+    const liked = mergePost(undefined, post('1', { favorited: true }), context);
+    const unliked = mergePost(liked, post('1', { favorited: false }), { ...context, now: 6000 });
+    expect(unliked.unlikedAt).toBe(6000);
+    const seenAgain = mergePost(unliked, post('1', { favorited: false }), {
+      ...context,
+      now: 7000,
+    });
+    expect(seenAgain.unlikedAt).toBe(6000);
+    const likedAgain = mergePost(seenAgain, post('1'), { ...context, source: 'like' });
+    expect(likedAgain).not.toHaveProperty('unlikedAt');
+    expect(liked).not.toHaveProperty('unbookmarkedAt');
+  });
+
+  it('says when a source was lost from what it was, is, and had recorded', () => {
+    expect(lostAt(1, 0, undefined, 5)).toBe(5);
+    expect(lostAt(0, 0, 3, 5)).toBe(3);
+    expect(lostAt(undefined, 0, undefined, 5)).toBeUndefined();
+    expect(lostAt(0, 1, 3, 5)).toBeUndefined();
   });
 
   it('keeps a real position when the post is seen again without one', () => {
@@ -339,6 +363,20 @@ describe('clearSource', () => {
   it('does nothing for a post it has never seen', async () => {
     expect(await clearSource(db, ACCOUNT, '404', 'like')).toEqual({ bookmarks: 0, likes: 0 });
   });
+
+  it('records when a kept post left the source, and not for a source it was not in', async () => {
+    await saveCapture(
+      db,
+      batch({
+        source: 'bookmark',
+        items: [{ post: post('1', { favorited: true }), sortIndex: '1' }],
+      }),
+    );
+    await clearSource(db, ACCOUNT, '1', 'bookmark', 7000);
+    await clearSource(db, ACCOUNT, '1', 'bookmark', 8000);
+    expect(await stored('1')).toMatchObject({ isBookmark: 0, unbookmarkedAt: 7000 });
+    expect(await stored('1')).not.toHaveProperty('unlikedAt');
+  });
 });
 
 describe('activeAccount', () => {
@@ -451,7 +489,13 @@ describe('the order of a source', () => {
 });
 
 describe('settings', () => {
-  const DEFAULTS: Settings = { remoteImages: true, backupReminderDays: 30, theme: 'x' };
+  const DEFAULTS: Settings = {
+    remoteImages: true,
+    backupReminderDays: 30,
+    theme: 'x',
+    captureBookmarks: true,
+    captureLikes: true,
+  };
 
   it('show images from X unless turned off', async () => {
     expect(await readSettings(db)).toEqual(DEFAULTS);
@@ -482,11 +526,27 @@ describe('settings', () => {
     expect((await readSettings(db)).backupReminderDays).toBe(30);
   });
 
+  it('capture both sources unless one is turned off', async () => {
+    const settings = await updateSettings(db, { captureLikes: false });
+    expect(settings).toMatchObject({ captureBookmarks: true, captureLikes: false });
+    expect(captures(settings, 'bookmark')).toBe(true);
+    expect(captures(settings, 'like')).toBe(false);
+    expect(captures({ ...DEFAULTS, captureBookmarks: false }, 'bookmark')).toBe(false);
+    expect(captureChange('bookmark', false)).toEqual({ captureBookmarks: false });
+    expect(captureChange('like', true)).toEqual({ captureLikes: true });
+  });
+
   it('fall back to defaults for values of the wrong type', async () => {
     await db.meta.put({
       accountId: '',
       key: 'settings',
-      value: { remoteImages: 'no', backupReminderDays: '7', theme: 1 },
+      value: {
+        remoteImages: 'no',
+        backupReminderDays: '7',
+        theme: 1,
+        captureBookmarks: 0,
+        captureLikes: 'off',
+      },
     });
     expect(await readSettings(db)).toEqual(DEFAULTS);
     await db.meta.put({ accountId: '', key: 'settings', value: 'garbage' });

@@ -183,7 +183,7 @@ function postOf(value: unknown): ExportedPost | undefined {
   if (!content || !isCapturedPost(content)) return undefined;
 
   const { isBookmark, isLike, bookmarkSort, likeSort, partial, unavailable } = value;
-  const { firstSeenAt, lastSeenAt, savedAt } = value;
+  const { firstSeenAt, lastSeenAt, savedAt, unbookmarkedAt, unlikedAt } = value;
   if (!isFlag(isBookmark) || !isFlag(isLike)) return undefined;
   // A position exactly when the post is in that source.
   const sortOf = (flag: 0 | 1, key: unknown) =>
@@ -191,6 +191,8 @@ function postOf(value: unknown): ExportedPost | undefined {
   if (!sortOf(isBookmark, bookmarkSort) || !sortOf(isLike, likeSort)) return undefined;
   if (typeof partial !== 'boolean' || typeof unavailable !== 'boolean') return undefined;
   if (!isTime(firstSeenAt) || !isTime(lastSeenAt) || !isTime(savedAt)) return undefined;
+  // When a source was lost: optional, and dropped while the post is in that source.
+  if (![unbookmarkedAt, unlikedAt].every((at) => at === undefined || isTime(at))) return undefined;
 
   return {
     ...content,
@@ -198,6 +200,8 @@ function postOf(value: unknown): ExportedPost | undefined {
     isLike,
     ...(typeof bookmarkSort === 'string' ? { bookmarkSort } : {}),
     ...(typeof likeSort === 'string' ? { likeSort } : {}),
+    ...(isBookmark === 0 && isTime(unbookmarkedAt) ? { unbookmarkedAt } : {}),
+    ...(isLike === 0 && isTime(unlikedAt) ? { unlikedAt } : {}),
     partial,
     unavailable,
     firstSeenAt,

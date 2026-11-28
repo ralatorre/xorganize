@@ -51,7 +51,19 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   remoteImages: true,
   backupReminderDays: 30,
   theme: 'x',
+  captureBookmarks: true,
+  captureLikes: true,
 };
+
+/** The settings change that turns capturing a source on or off. */
+export function captureChange(source: SourceKind, enabled: boolean): Partial<Settings> {
+  return source === 'bookmark' ? { captureBookmarks: enabled } : { captureLikes: enabled };
+}
+
+/** Whether the settings let a source be captured (SPEC, 7.3). */
+export function captures(settings: Settings, source: SourceKind): boolean {
+  return source === 'bookmark' ? settings.captureBookmarks : settings.captureLikes;
+}
 const SORT_WIDTH = 30;
 
 /**
@@ -130,6 +142,8 @@ export function mergePost(
   };
   const bookmarkSort = sort('bookmark', isBookmark, existing?.bookmarkSort);
   const likeSort = sort('like', isLike, existing?.likeSort);
+  const unbookmarkedAt = lostAt(existing?.isBookmark, isBookmark, existing?.unbookmarkedAt, now);
+  const unlikedAt = lostAt(existing?.isLike, isLike, existing?.unlikedAt, now);
 
   return {
     accountId: context.accountId,
@@ -139,12 +153,28 @@ export function mergePost(
     hasTags: existing?.hasTags ?? 0,
     ...(bookmarkSort !== undefined ? { bookmarkSort } : {}),
     ...(likeSort !== undefined ? { likeSort } : {}),
+    ...(unbookmarkedAt !== undefined ? { unbookmarkedAt } : {}),
+    ...(unlikedAt !== undefined ? { unlikedAt } : {}),
     partial: context.partial === true && !keepStored,
     unavailable: false,
     firstSeenAt: existing?.firstSeenAt ?? now,
     lastSeenAt: now,
     savedAt: existing?.savedAt ?? now,
   };
+}
+
+/**
+ * When a post left a source: now, if it was in it and is no longer; the time
+ * already recorded, if it was already out; nothing while it is in it.
+ */
+export function lostAt(
+  was: 0 | 1 | undefined,
+  is: 0 | 1,
+  recorded: number | undefined,
+  now: number,
+): number | undefined {
+  if (is) return undefined;
+  return was ? now : recorded;
 }
 
 /** The fields of a stored post that describe the post itself. */
@@ -201,14 +231,18 @@ export async function clearSource(
   accountId: AccountId,
   postId: PostId,
   source: SourceKind,
+  now = Date.now(),
 ): Promise<Counts> {
   return db.transaction('rw', db.posts, async () => {
     const post = await db.posts.get([accountId, postId]);
     if (post) {
-      if (source === 'bookmark') {
+      // A post cleared from a source it was not in keeps what it had.
+      if (source === 'bookmark' && post.isBookmark) {
+        post.unbookmarkedAt = now;
         post.isBookmark = 0;
         delete post.bookmarkSort;
-      } else {
+      } else if (source === 'like' && post.isLike) {
+        post.unlikedAt = now;
         post.isLike = 0;
         delete post.likeSort;
       }
@@ -432,17 +466,20 @@ export async function activeAccount(db: LibraryDatabase): Promise<AccountId | un
 export async function readSettings(db: LibraryDatabase): Promise<Settings> {
   const row = await db.meta.get(['', SETTINGS]);
   const stored = typeof row?.value === 'object' && row.value !== null ? row.value : {};
-  const { remoteImages, backupReminderDays, theme } = stored as Partial<
-    Record<keyof Settings, unknown>
-  >;
+  const { remoteImages, backupReminderDays, theme, captureBookmarks, captureLikes } =
+    stored as Partial<Record<keyof Settings, unknown>>;
+  const flag = (value: unknown, fallback: boolean) =>
+    typeof value === 'boolean' ? value : fallback;
   return {
-    remoteImages: typeof remoteImages === 'boolean' ? remoteImages : DEFAULT_SETTINGS.remoteImages,
+    remoteImages: flag(remoteImages, DEFAULT_SETTINGS.remoteImages),
     backupReminderDays: (BACKUP_REMINDER_DAYS as readonly unknown[]).includes(backupReminderDays)
       ? (backupReminderDays as number)
       : DEFAULT_SETTINGS.backupReminderDays,
     theme: (THEME_SETTINGS as readonly unknown[]).includes(theme)
       ? (theme as ThemeSetting)
       : DEFAULT_SETTINGS.theme,
+    captureBookmarks: flag(captureBookmarks, DEFAULT_SETTINGS.captureBookmarks),
+    captureLikes: flag(captureLikes, DEFAULT_SETTINGS.captureLikes),
   };
 }
 

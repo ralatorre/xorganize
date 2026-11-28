@@ -38,7 +38,7 @@ const clear: CaptureClearMessage = {
 
 const RUST: TagSummary = { id: 'tag-1', name: 'rust', color: 0 };
 
-function setup(outcome: 'stored' | 'failed' = 'stored') {
+function setup(outcome: 'stored' | 'failed' = 'stored', off: readonly string[] = []) {
   const saved: CapturePostsMessage[] = [];
   const cleared: CaptureClearMessage[] = [];
   const changes: TagChange[] = [];
@@ -53,6 +53,7 @@ function setup(outcome: 'stored' | 'failed' = 'stored') {
       save: (message) => (saved.push(message), result(COUNTS)),
       clear: (message) => (cleared.push(message), result(COUNTS)),
     },
+    captures: (source) => Promise.resolve(!off.includes(source)),
     tags: {
       forPosts: (_, postIds) =>
         result(new Map(postIds.map((id) => [id, id === '101' ? [RUST] : []]))),
@@ -87,6 +88,15 @@ describe('createWorkerHandler', () => {
     const { handle } = setup('failed');
     expect(await handle(posts, FROM_X)).toEqual({ ok: false });
     expect(await handle(clear, FROM_X)).toEqual({ ok: false });
+  });
+
+  it('stores nothing for a source whose capture is off, and says why', async () => {
+    const { handle, saved, cleared } = setup('stored', ['bookmark', 'like']);
+    expect(await handle(posts, FROM_X)).toEqual({ ok: false, off: true });
+    expect(await handle(clear, FROM_X)).toEqual({ ok: false, off: true });
+    expect(saved).toEqual([]);
+    expect(cleared).toEqual([]);
+    expect(await setup('stored', ['like']).handle(posts, FROM_X)).toMatchObject({ ok: true });
   });
 
   it('answers a content script that has connected', async () => {

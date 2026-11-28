@@ -87,6 +87,8 @@ export function backupSummary(backup: Backup): BackupSummary {
  * - The content comes from the newer copy, except that a partial copy never
  *   replaces a full one.
  * - Whether X still has the post comes from the newer copy.
+ * - When it left a source, while it is in neither copy's source, comes from
+ *   the newer copy that records it.
  * - The times of first sight and of entering the library keep the earlier.
  * - It counts as stored now, so that search reads it again (11).
  */
@@ -120,8 +122,16 @@ export function mergeImported(
   };
   delete merged.bookmarkSort;
   delete merged.likeSort;
+  delete merged.unbookmarkedAt;
+  delete merged.unlikedAt;
   if (bookmarkSort !== undefined) merged.bookmarkSort = bookmarkSort;
   if (likeSort !== undefined) merged.likeSort = likeSort;
+  const lost = (flag: 'isBookmark' | 'isLike', key: 'unbookmarkedAt' | 'unlikedAt') =>
+    merged[flag] ? undefined : (newer[key] ?? older[key]);
+  const unbookmarkedAt = lost('isBookmark', 'unbookmarkedAt');
+  const unlikedAt = lost('isLike', 'unlikedAt');
+  if (unbookmarkedAt !== undefined) merged.unbookmarkedAt = unbookmarkedAt;
+  if (unlikedAt !== undefined) merged.unlikedAt = unlikedAt;
   return merged;
 }
 

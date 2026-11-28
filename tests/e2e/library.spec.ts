@@ -237,6 +237,57 @@ test('captures bookmarks and likes as they load, and keeps up with changes', asy
   await expect.poll(() => banner(site)).toMatchObject({ hidden: true });
 });
 
+test('a source can stop being captured, and a post that leaves one says so', async ({
+  context,
+  extensionId,
+}) => {
+  await serveStandIn(context);
+  const site = await context.newPage();
+  await site.goto('https://x.com/i/bookmarks');
+  await timeline(site, 'Bookmarks');
+  const library = await context.newPage();
+  await library.goto(`chrome-extension://${extensionId}/library.html`);
+  // Bookmark three is liked too, as the bookmarks timeline says.
+  await expect.poll(() => counts(library)).toEqual(totals(3, 3, 1));
+
+  // With likes turned off, neither the Likes timeline nor a like is stored,
+  // and the page says why its likes are not counted.
+  await openSettings(library);
+  const likes = library.getByRole('switch', { name: 'Capture likes' });
+  await expect(likes).toBeChecked();
+  await expect(likes).toHaveAccessibleDescription(/each post you like on X/);
+  await likes.uncheck();
+  await backToLibrary(library);
+  await timeline(site, 'Likes', { userId: VIEWER });
+  await expect
+    .poll(() => banner(site))
+    .toEqual({ text: 'xorganize · capturing likes is turned off in its settings', hidden: false });
+  await change(site, 'FavoriteTweet', '102');
+  await change(site, 'UnfavoriteTweet', '103');
+  // Bookmarking still is.
+  await change(site, 'DeleteBookmark', '101');
+  await expect.poll(() => counts(library)).toEqual(totals(2, 2, 1));
+
+  // Back on, a like is followed again. A post that is unliked but still
+  // bookmarked stays, and its card says it is no longer liked.
+  await openSettings(library);
+  await likes.check();
+  await backToLibrary(library);
+  await change(site, 'FavoriteTweet', '102');
+  await expect.poll(() => counts(library)).toEqual(totals(2, 2, 2));
+  await change(site, 'UnfavoriteTweet', '103');
+  await expect.poll(() => counts(library)).toEqual(totals(2, 2, 1));
+  const card = (text: string) => library.locator('article.post', { hasText: text });
+  await source(library, 'Bookmarks').click();
+  await expect(card('Bookmark three').locator('.post__label')).toHaveText('No longer liked');
+  await expect(card('Bookmark three').getByRole('img', { name: 'Liked' })).toHaveCount(0);
+  await expect(card('Bookmark two').locator('.post__label')).toHaveCount(0);
+
+  // Liked again, the note goes.
+  await change(site, 'FavoriteTweet', '103');
+  await expect(card('Bookmark three').locator('.post__label')).toHaveCount(0);
+});
+
 test('finds posts by their text and author, and keeps up with new ones', async ({
   context,
   extensionId,

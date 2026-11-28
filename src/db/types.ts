@@ -28,6 +28,12 @@ export interface StoredPost {
   bookmarkSort?: string;
   /** Position among likes. Present exactly when isLike is 1. */
   likeSort?: string;
+  /**
+   * When the post was seen to be unbookmarked or unliked, while it stayed for
+   * another reason. Absent while it is in that source.
+   */
+  unbookmarkedAt?: number;
+  unlikedAt?: number;
 
   /** Built from the page, not from the API, and waiting to be completed. */
   partial: boolean;
@@ -85,6 +91,10 @@ export interface Settings {
   /** Days after the last backup before the library reminds the user to make one. 0: never. */
   backupReminderDays: number;
   theme: ThemeSetting;
+  /** Store the Bookmarks timeline and posts bookmarked on X. */
+  captureBookmarks: boolean;
+  /** Store the account's Likes timeline and posts liked on X. */
+  captureLikes: boolean;
 }
 
 /** When the account's library was last backed up, and what else the backup reminder counts from. */

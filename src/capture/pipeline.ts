@@ -23,6 +23,12 @@ export interface CaptureEnvironment {
   onCaptured(source: SourceKind, counts: Counts): void;
   /** Called when the worker did not store what it was sent. Never silent. */
   onFailed(): void;
+  /**
+   * Called when a page of a source's timeline was not stored because its
+   * capture is off in settings. A bookmark or like made while it is off says
+   * nothing: the user chose that.
+   */
+  onOff(source: SourceKind): void;
   /** Reads the basics of a post from the page, for one that was never seen arriving. */
   postFromPage(id: string): CapturedPost | undefined;
   /** Posts seen recently. Shared with tagging, which needs the same posts. */
@@ -32,10 +38,11 @@ export interface CaptureEnvironment {
 export function createCapture(environment: CaptureEnvironment) {
   const seen = environment.seen ?? new SeenPosts();
 
-  const store = async (message: CaptureMessage, source: SourceKind) => {
+  const store = async (message: CaptureMessage, source: SourceKind, timeline = false) => {
     const reply = await environment.send(message).catch(() => undefined);
     if (reply?.ok) environment.onCaptured(source, reply.counts);
-    else environment.onFailed();
+    else if (!reply?.off) environment.onFailed();
+    else if (timeline) environment.onOff(source);
   };
 
   const onMutation = async (message: ResponseMessage, body: Record<string, unknown>) => {
@@ -117,6 +124,7 @@ export function createCapture(environment: CaptureEnvironment) {
         unavailable: unavailable.slice(0, MAX_ITEMS),
       },
       source,
+      true,
     );
   };
 }

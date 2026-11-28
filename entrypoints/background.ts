@@ -1,7 +1,14 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { DIAGNOSTICS } from '@/src/build';
-import { clearSource, recordProfile, recordXTheme, saveCapture } from '@/src/db/repo';
+import {
+  captures,
+  clearSource,
+  readSettings,
+  recordProfile,
+  recordXTheme,
+  saveCapture,
+} from '@/src/db/repo';
 import { library } from '@/src/db/schema';
 import { RECENT_TAGS, recentTags, setPostTags, suggestTags, tagsForPosts } from '@/src/db/tags';
 import { createDiagnosticsStore } from '@/src/diagnostics/store';
@@ -24,6 +31,7 @@ export default defineBackground(() => {
       save: (message) => saveCapture(db, message),
       clear: (message) => clearSource(db, message.accountId, message.postId, message.source),
     },
+    captures: async (source) => captures(await readSettings(db), source),
     tags: {
       forPosts: (accountId, postIds) => tagsForPosts(db, accountId, postIds),
       suggest: async (accountId, query, limit) => ({

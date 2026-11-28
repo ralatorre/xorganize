@@ -36,6 +36,8 @@ export interface Banner {
   show(source: SourceKind, counts: Counts): void;
   /** Says plainly that posts could not be saved, so a failure is never silent. */
   fail(): void;
+  /** Says that a timeline's posts were not stored because its capture is off. */
+  off(source: SourceKind): void;
   /** Any other short message. */
   say(text: string): void;
 }
@@ -88,6 +90,10 @@ export function createBanner(): Banner {
     },
     fail() {
       display('xorganize · could not save these posts. Reload the page, or restart the browser.');
+    },
+    off(source) {
+      const noun = source === 'bookmark' ? 'bookmarks' : 'likes';
+      display(`xorganize · capturing ${noun} is turned off in its settings`);
     },
     say(text) {
       display(`xorganize · ${text}`);
