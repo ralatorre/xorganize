@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
+import type { SourceKind } from '@/src/capture/operations';
 import type { AccountId, Settings, StoredAccount, ThemeSetting } from '@/src/db/types';
 import { sizeLine, storedLine } from '@/src/library/accounts';
 import { REMINDER_CHOICES } from '@/src/library/backup-reminder';
@@ -7,10 +8,12 @@ import type { IconName } from '../icons';
 import { Icon } from './Icon';
 import { Select } from './Select';
 import { SettingRow } from './SettingRow';
+import { SettingSwitch } from './SettingSwitch';
 import { SettingsGroup } from './SettingsGroup';
 import { ThemePicker } from './ThemePicker';
 
 const GROUPS: ReadonlyArray<{ id: string; title: string; icon: IconName }> = [
+  { id: 'capture', title: 'Capture', icon: 'bookmark' },
   { id: 'appearance', title: 'Appearance', icon: 'appearance' },
   { id: 'privacy', title: 'Privacy', icon: 'privacy' },
   { id: 'backup', title: 'Backup and restore', icon: 'backup' },
@@ -40,6 +43,7 @@ export function SettingsPage(props: {
   /** The control that picks a backup to restore. */
   restore: ComponentChildren;
   onTheme(theme: ThemeSetting): void;
+  onPrompt(source: SourceKind, enabled: boolean): void;
   onImages(enabled: boolean): void;
   onReminder(days: number): void;
   onDeleteAll(): void;
@@ -67,6 +71,35 @@ export function SettingsPage(props: {
       </nav>
       <main class="content settings">
         <SettingsGroup
+          id="capture"
+          title="Capture"
+          description="Bookmarks and likes are both always saved. After one on X, a small prompt can offer to tag the post."
+        >
+          <SettingRow
+            id="prompt-bookmark"
+            title="Prompt for tags after bookmarking"
+            description="Shows “Saved to library” with Add tags for a few seconds after you bookmark a post on X."
+          >
+            <SettingSwitch
+              id="prompt-bookmark"
+              checked={settings.promptAfterBookmark}
+              onChange={(enabled) => props.onPrompt('bookmark', enabled)}
+            />
+          </SettingRow>
+          <SettingRow
+            id="prompt-like"
+            title="Prompt for tags after liking"
+            description="The same after you like a post. Off at first, since likes are far more frequent."
+          >
+            <SettingSwitch
+              id="prompt-like"
+              checked={settings.promptAfterLike}
+              onChange={(enabled) => props.onPrompt('like', enabled)}
+            />
+          </SettingRow>
+        </SettingsGroup>
+
+        <SettingsGroup
           id="appearance"
           title="Appearance"
           description="Match X uses the theme you last had on x.com. The tag button on x.com always follows X."
@@ -84,15 +117,7 @@ export function SettingsPage(props: {
             title="Show images from X"
             description="Avatars and thumbnails load from X’s image server, without cookies. Turned off, the library makes no network requests at all."
           >
-            <input
-              type="checkbox"
-              role="switch"
-              class="switch"
-              aria-labelledby="images-title"
-              aria-describedby="images-description"
-              checked={settings.remoteImages}
-              onChange={(event) => props.onImages(event.currentTarget.checked)}
-            />
+            <SettingSwitch id="images" checked={settings.remoteImages} onChange={props.onImages} />
           </SettingRow>
           <SettingRow
             id="stored"

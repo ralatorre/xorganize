@@ -7,6 +7,7 @@ import type { CapturedPost } from '@/src/capture/normalise';
 import type { Theme } from '@/src/dom/theme';
 import { createKeyboardGuard, contain } from '@/src/inline/keyboard-guard';
 import { POPOVER_SUGGESTIONS } from '@/src/inline/popover-model';
+import { firstInView } from '@/src/inline/prompt';
 import { isShortcutPress, matchesShortcut, postAnchor } from '@/src/inline/shortcut';
 import { createTagState } from '@/src/inline/tag-state';
 import { createTagger } from '@/src/inline/tagger';
@@ -24,6 +25,7 @@ import {
 } from '@/src/messaging/protocol';
 import { createPopover } from '@/src/ui/popover';
 import { startMounter } from './mounter';
+import { createPromptToast } from './prompt-toast';
 import { createTagButton, type TagButton } from './tag-button';
 import { watchTheme } from './theme-watcher';
 
@@ -38,8 +40,16 @@ export interface InlineTaggingDependencies {
   onFailed(): void;
 }
 
+export interface InlineTagging {
+  /**
+   * Offers to tag a post just bookmarked or liked (DESIGN, 4.3), from its tag
+   * button on screen. Nothing shows when the post has none in view.
+   */
+  prompt(postId: string): void;
+}
+
 /** Must run at document_start, so the keyboard guard is in place before any page script. */
-export function startInlineTagging(deps: InlineTaggingDependencies): void {
+export function startInlineTagging(deps: InlineTaggingDependencies): InlineTagging {
   const guard = createKeyboardGuard(window);
   const buttons = new Map<string, Set<TagButton>>();
   const unwatch = new Map<TagButton, () => void>();
@@ -165,6 +175,22 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
     },
   });
 
+  const toast = createPromptToast({
+    guard,
+    mountPoint: () => document.body ?? document.documentElement,
+    schedule: (task, ms) => {
+      const timer = setTimeout(task, ms);
+      return () => clearTimeout(timer);
+    },
+  });
+  const buttonInView = (postId: string) =>
+    firstInView(
+      buttons.get(postId) ?? [],
+      (button) => (button.host.isConnected ? button.host.getBoundingClientRect() : undefined),
+      window.innerWidth,
+      window.innerHeight,
+    );
+
   // Alt+T on a focused post opens its popover, and focus comes back to the post.
   window.addEventListener(
     'keydown',
@@ -186,4 +212,15 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
     },
     true,
   );
+
+  return {
+    prompt(postId) {
+      if (!buttonInView(postId)) return;
+      toast.show(theme, () => {
+        // The post may have scrolled away while the prompt showed.
+        const button = buttonInView(postId);
+        if (button) popover.toggle(button);
+      });
+    },
+  };
 }

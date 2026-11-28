@@ -111,6 +111,11 @@ When the user bookmarks a post through X's own button, a small toast appears bot
 
 "Add tags" opens the tag popover for that post. The toast dismisses itself after five seconds. It can be turned off in settings, and can be enabled separately for likes (off by default, since likes are far more frequent).
 
+- It appears once the post is stored, so "Saved to library" is never early, and only when the post's tag button is on screen.
+- "Add tags" opens the popover from that tag button, as a click on it would, and focus returns there when the popover closes.
+- The five seconds wait while the pointer is over the toast or focus is in it, and start again in full when they leave. `Esc` and its close button dismiss it.
+- It follows X's theme, like the tag button, and a new bookmark or like replaces it.
+
 ### 4.4 Capture banner
 
 > **As first built:** a single status line at the bottom centre of the window, shown when a page of bookmarks or likes has been captured ("xorganize · 240 bookmarks captured") and hidden when you move to another page. It has no controls. The fuller banner described below, with auto-scroll, comes with a later milestone.
@@ -264,7 +269,7 @@ Settings is a page of the library, opened from the gear in its header, with "Bac
 - **Theme.** Match X uses the theme last seen on x.com: Light, Dim or Dark. Until x.com has been visited, it follows the system. System follows the system's light or dark setting. The tag button and popover on x.com always follow X, whatever the library uses.
 - The Danger zone panel has a red-tinted border, and its button is outlined in red. "Delete all data…" opens a dialog that says what goes and what stays: every post, tag and tag assignment, for every X account in this browser; settings stay, so that a choice such as not loading images from X is not undone; nothing on X changes. Its button stays disabled until "delete" is typed, in any case. Cancel has focus first. Afterwards the library shows its empty state, from which a backup can be restored.
 
-> **As first built:** the Settings page has the Appearance, Privacy, Backup and restore, and Danger zone groups. Match X and System preview the two themes they most often choose between, side by side. The Capture rows come with the tag prompt (M6), and Shortcuts with M7. The backup reminder shows in the library only until the popup (M7).
+> **As first built:** the Settings page has the Capture, Appearance, Privacy, Backup and restore, and Danger zone groups. Match X and System preview the two themes they most often choose between, side by side. Shortcuts come with M7. The backup reminder shows in the library only until the popup (M7).
 
 ## 5. Key flows
 

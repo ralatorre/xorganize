@@ -8,6 +8,8 @@ import {
   counts,
   lostAt,
   mergePost,
+  promptChange,
+  prompts,
   readSettings,
   readXTheme,
   recentKey,
@@ -487,7 +489,13 @@ describe('the order of a source', () => {
 });
 
 describe('settings', () => {
-  const DEFAULTS: Settings = { remoteImages: true, backupReminderDays: 30, theme: 'x' };
+  const DEFAULTS: Settings = {
+    remoteImages: true,
+    backupReminderDays: 30,
+    theme: 'x',
+    promptAfterBookmark: true,
+    promptAfterLike: false,
+  };
 
   it('show images from X unless turned off', async () => {
     expect(await readSettings(db)).toEqual(DEFAULTS);
@@ -518,11 +526,26 @@ describe('settings', () => {
     expect((await readSettings(db)).backupReminderDays).toBe(30);
   });
 
+  it('prompt for tags after a bookmark, and after a like only once turned on', async () => {
+    expect(prompts(DEFAULTS, 'bookmark')).toBe(true);
+    expect(prompts(DEFAULTS, 'like')).toBe(false);
+    const settings = await updateSettings(db, promptChange('like', true));
+    expect(prompts(settings, 'like')).toBe(true);
+    expect(await readSettings(db)).toMatchObject({ promptAfterLike: true });
+    expect(promptChange('bookmark', false)).toEqual({ promptAfterBookmark: false });
+  });
+
   it('fall back to defaults for values of the wrong type', async () => {
     await db.meta.put({
       accountId: '',
       key: 'settings',
-      value: { remoteImages: 'no', backupReminderDays: '7', theme: 1 },
+      value: {
+        remoteImages: 'no',
+        backupReminderDays: '7',
+        theme: 1,
+        promptAfterBookmark: 0,
+        promptAfterLike: 'yes',
+      },
     });
     expect(await readSettings(db)).toEqual(DEFAULTS);
     await db.meta.put({ accountId: '', key: 'settings', value: 'garbage' });

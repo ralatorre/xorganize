@@ -1,6 +1,7 @@
 import { render } from 'preact';
 import { DIAGNOSTICS } from '@/src/build';
-import { chooseAccount, dismissBackupReminder, updateSettings } from '@/src/db/repo';
+import type { SourceKind } from '@/src/capture/operations';
+import { chooseAccount, dismissBackupReminder, promptChange, updateSettings } from '@/src/db/repo';
 import { library } from '@/src/db/schema';
 import type { AccountId, PostId, ThemeSetting } from '@/src/db/types';
 import type { Theme } from '@/src/dom/theme';
@@ -36,6 +37,8 @@ const search = createSearchClient(
   new Worker(new URL('./search-worker.ts', import.meta.url), { type: 'module' }),
 );
 const setRemoteImages = (enabled: boolean) => void updateSettings(db, { remoteImages: enabled });
+const setPrompt = (source: SourceKind, enabled: boolean) =>
+  void updateSettings(db, promptChange(source, enabled));
 const setBackupReminder = (days: number) => void updateSettings(db, { backupReminderDays: days });
 const setTheme = (theme: ThemeSetting) => void updateSettings(db, { theme });
 const dismissReminder = (accountId: AccountId) =>
@@ -141,6 +144,7 @@ if (root) {
       exportPosts={exportTo}
       importer={importer}
       setRemoteImages={setRemoteImages}
+      setPrompt={setPrompt}
       setBackupReminder={setBackupReminder}
       setTheme={setTheme}
       colourScheme={colourScheme}

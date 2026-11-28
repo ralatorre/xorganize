@@ -91,6 +91,10 @@ export interface Settings {
   /** Days after the last backup before the library reminds the user to make one. 0: never. */
   backupReminderDays: number;
   theme: ThemeSetting;
+  /** Offer to tag a post just bookmarked on X (DESIGN, 4.3). */
+  promptAfterBookmark: boolean;
+  /** The same after a like. Off by default: likes are far more frequent. */
+  promptAfterLike: boolean;
 }
 
 /** When the account's library was last backed up, and what else the backup reminder counts from. */

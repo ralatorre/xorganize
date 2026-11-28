@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'preact/hooks';
+import type { SourceKind } from '@/src/capture/operations';
 import type { AccountId, PostId, TagSuggestion, ThemeSetting as ThemeChoice } from '@/src/db/types';
 import type { Theme } from '@/src/dom/theme';
 import { backupReminder, lastBackupLine, reminderMessage } from '@/src/library/backup-reminder';
@@ -80,6 +81,8 @@ export interface LibraryProps {
   importer: LibraryImport;
   /** Turns images from X on or off. */
   setRemoteImages(enabled: boolean): void;
+  /** Turns the tag prompt after a bookmark or a like on or off. */
+  setPrompt(source: SourceKind, enabled: boolean): void;
   /** Chooses the library's theme. */
   setTheme(theme: ThemeChoice): void;
   /** Whether the system asks for dark colours, for the System and Match X themes. */
@@ -120,7 +123,8 @@ type Dialog =
 export function App(props: LibraryProps) {
   const { catalogue, authorOrder, posts, search, edits, copy, setRemoteImages, children } = props;
   const { exportPosts, importer, setBackupReminder, dismissBackupReminder, now } = props;
-  const { setTheme, colourScheme, applyTheme, chooseAccount, pages, measureStorage } = props;
+  const { setPrompt, setTheme, colourScheme, applyTheme, chooseAccount, pages, measureStorage } =
+    props;
   const page = usePage(pages);
   const [view, change] = useReducer(changeView, DEFAULT_VIEW);
   const [flow, step] = useReducer(changeImport, IDLE);
@@ -272,6 +276,7 @@ export function App(props: LibraryProps) {
                 }
           }
           restore={importControl('Choose a file…', 'button')}
+          onPrompt={setPrompt}
           onTheme={setTheme}
           onImages={setRemoteImages}
           onReminder={setBackupReminder}

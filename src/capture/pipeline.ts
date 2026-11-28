@@ -23,6 +23,11 @@ export interface CaptureEnvironment {
   onCaptured(source: SourceKind, counts: Counts): void;
   /** Called when the worker did not store what it was sent. Never silent. */
   onFailed(): void;
+  /**
+   * Called once a post the user has just bookmarked or liked on X is stored,
+   * when the settings ask to offer tags for it (DESIGN, 4.3).
+   */
+  onPrompt(postId: string): void;
   /** Reads the basics of a post from the page, for one that was never seen arriving. */
   postFromPage(id: string): CapturedPost | undefined;
   /** Posts seen recently. Shared with tagging, which needs the same posts. */
@@ -36,6 +41,7 @@ export function createCapture(environment: CaptureEnvironment) {
     const reply = await environment.send(message).catch(() => undefined);
     if (reply?.ok) environment.onCaptured(source, reply.counts);
     else environment.onFailed();
+    return reply;
   };
 
   const onMutation = async (message: ResponseMessage, body: Record<string, unknown>) => {
@@ -63,7 +69,7 @@ export function createCapture(environment: CaptureEnvironment) {
     const content = { ...post };
     delete content.bookmarked;
     delete content.liked;
-    await store(
+    const reply = await store(
       {
         type: 'capture/posts',
         accountId,
@@ -71,9 +77,11 @@ export function createCapture(environment: CaptureEnvironment) {
         items: [remembered ? { post: content } : { post: content, partial: true }],
         referenced: [],
         unavailable: [],
+        added: true,
       },
       source,
     );
+    if (reply?.ok && reply.prompt) environment.onPrompt(postId);
   };
 
   return async function capture(message: ResponseMessage): Promise<void> {
