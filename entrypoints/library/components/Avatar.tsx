@@ -1,10 +1,19 @@
 import { initialOf } from '@/src/library/format';
 import { RemoteImage } from './RemoteImage';
 
+/** Avatar sizes in pixels: on a card, and in a quoted post. */
+const SIZES = { medium: 40, small: 20 } as const;
+
 /** The author's picture, or their initial when there is none to load. */
-export function Avatar({ name, src }: { name: string; src: string | undefined }) {
+export function Avatar(props: {
+  name: string;
+  src: string | undefined;
+  size?: keyof typeof SIZES;
+}) {
+  const { name, src, size = 'medium' } = props;
+  const classes = `avatar avatar--${size}`;
   const placeholder = (
-    <span class="avatar avatar--placeholder" aria-hidden="true">
+    <span class={`${classes} avatar--placeholder`} aria-hidden="true">
       {initialOf(name)}
     </span>
   );
@@ -12,11 +21,11 @@ export function Avatar({ name, src }: { name: string; src: string | undefined })
   return (
     <RemoteImage
       key={src}
-      class="avatar"
+      class={classes}
       src={src}
       alt=""
-      width={40}
-      height={40}
+      width={SIZES[size]}
+      height={SIZES[size]}
       fallback={placeholder}
     />
   );

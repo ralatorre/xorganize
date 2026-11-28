@@ -324,6 +324,27 @@ button.account[aria-expanded='true'] {
   min-width: 0;
 }
 
+.dropdown__separator {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--border);
+}
+
+.dropdown__item > .icon:first-child {
+  align-self: flex-start;
+  margin: 2px 0 0;
+  color: var(--text-2);
+}
+
+.dropdown__key {
+  margin-left: auto;
+}
+
+.dropdown__item--danger,
+.dropdown__item--danger > .icon:first-child {
+  color: var(--danger);
+}
+
 .dropdown__title,
 .dropdown__detail {
   display: block;
@@ -905,6 +926,7 @@ kbd {
   position: relative;
   margin: 0;
   padding: 0;
+  border-top: 1px solid var(--border);
   list-style: none;
 }
 
@@ -915,12 +937,24 @@ kbd {
   width: 100%;
 }
 
+/* A row with an open menu sits above the rows after it, which would otherwise cover the menu. */
+.posts__row:has(.dropdown__menu) {
+  z-index: 1;
+}
+
+/* Post cards (DESIGN, 4.5), shaped like X's. */
+
 .post {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   gap: 12px;
-  padding: 12px 0;
-  border-top: 1px solid var(--border);
+  padding: 14px 12px 10px;
+  border-bottom: 1px solid var(--border);
+  transition: background-color var(--ease);
+}
+
+.post:hover {
+  background: var(--card-hover);
 }
 
 .post--loading {
@@ -933,18 +967,49 @@ kbd {
   border-radius: 12px;
 }
 
-.post__name {
-  font-weight: 600;
+.post__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 20px;
 }
 
-.post__meta {
+.post__name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.post__handle,
+.post__date {
   color: var(--text-2);
-  font-size: 13px;
+  white-space: nowrap;
+}
+
+.post__handle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.post__sources {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--text-3);
+}
+
+.post__sources .icon {
+  fill: currentColor;
 }
 
 .post__text {
-  margin: 4px 0 8px;
+  margin: 4px 0 0;
   font-size: 15px;
+  line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -958,54 +1023,111 @@ kbd {
 }
 
 .post__more {
-  margin: -4px 0 8px;
+  margin-top: 2px;
 }
 
-.post__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 8px;
-  padding: 0;
-  list-style: none;
-}
-
-.post footer {
+.post__foot {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 6px;
+  min-height: 32px;
+  margin-top: 10px;
 }
 
-.post a {
-  color: inherit;
+.post__tags {
+  display: contents;
+}
+
+.post__tags li {
+  display: flex;
+  list-style: none;
+}
+
+.post__label {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Shown while the card is hovered or has focus, and always where nothing hovers. */
+.post__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity var(--ease);
+}
+
+.post:hover .post__actions,
+.post:focus-within .post__actions,
+.post__actions:has([aria-expanded='true']) {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .post__actions {
+    opacity: 1;
+  }
+}
+
+.chip--tag {
+  cursor: pointer;
+  transition: background-color var(--ease);
+}
+
+.chip--tag:hover {
+  background: var(--chip-hover);
 }
 
 .quote {
-  margin: 0 0 8px;
+  margin: 12px 0 0;
   padding: 10px 14px 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
 }
 
+.quote__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+}
+
 .quote__text {
   display: -webkit-box;
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   overflow: hidden;
+  font-size: 14px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
 }
 
 .avatar {
   display: block;
+  flex: none;
   width: 40px;
   height: 40px;
   border-radius: 50%;
   background: var(--chip);
   object-fit: cover;
+}
+
+.avatar--small {
+  width: 20px;
+  height: 20px;
+  font-size: 9px;
 }
 
 .avatar--placeholder {
@@ -1016,36 +1138,60 @@ kbd {
   font-weight: 600;
 }
 
-.thumbnails {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 128px));
-  gap: 4px;
-  margin: 0 0 8px;
-  padding: 0;
-  list-style: none;
-}
+/* Media in one frame, laid out as X does: 1 wide, 2 side by side, 3 as one
+   tall and two small, 4 as a grid. */
 
-.thumbnail {
-  position: relative;
-  aspect-ratio: 1;
+.media {
+  display: grid;
+  gap: 2px;
+  aspect-ratio: 16 / 9;
+  margin: 12px 0 0;
+  padding: 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: var(--border);
+  list-style: none;
 }
 
-.thumbnail img {
+.media--2,
+.media--3,
+.media--4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.media--3,
+.media--4 {
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.media--3 > :first-child {
+  grid-row: span 2;
+}
+
+.media--hidden {
+  display: grid;
+  place-items: center;
+  background: var(--field);
+}
+
+.media__cell {
+  position: relative;
+  min-height: 0;
+  background: var(--field);
+}
+
+.media__cell img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.thumbnail__badge {
+.media__badge {
   position: absolute;
-  bottom: 4px;
-  left: 4px;
-  padding: 0 6px;
+  bottom: 8px;
+  left: 8px;
+  padding: 1px 6px;
   border-radius: 5px;
   background: rgb(0 0 0 / 0.72);
   color: #ffffff;
@@ -1053,10 +1199,9 @@ kbd {
   font-weight: 600;
 }
 
-.thumbnail__missing {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.media__missing {
+  display: grid;
+  place-items: center;
   height: 100%;
   padding: 4px;
   color: var(--text-2);
@@ -1064,11 +1209,7 @@ kbd {
   text-align: center;
 }
 
-.thumbnails--hidden {
-  display: block;
-}
-
-/* Changing tags and posts */
+/* Changing tags */
 
 .chip--add {
   border: 1px dashed var(--border-strong);
@@ -1081,6 +1222,12 @@ kbd {
     color var(--ease);
 }
 
+.chip--add:not(.chip--add-text) {
+  width: 26px;
+  padding: 0;
+  justify-content: center;
+}
+
 .chip--add:hover,
 .chip--add[aria-expanded='true'] {
   border-style: solid;
@@ -1089,20 +1236,62 @@ kbd {
   color: var(--accent-ink);
 }
 
-.menu {
-  display: inline-flex;
-  flex-wrap: wrap;
+/* Toasts: one at a time, at the bottom centre (DESIGN, 4.5). */
+
+.toasts {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  z-index: 60;
+  transform: translateX(-50%);
+}
+
+.toast {
+  display: flex;
   align-items: center;
   gap: 8px;
+  max-width: calc(100vw - 32px);
+  min-height: 44px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 10px;
+  background: var(--toast-bg);
+  color: var(--toast-text);
+  box-shadow: var(--shadow-large);
+  font-size: 13px;
 }
 
-.menu__items {
-  display: inline-flex;
-  gap: 4px;
+.toast__message {
+  flex: 1;
 }
 
-.menu__status:empty {
-  display: none;
+.toast__action,
+.toast__close {
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  cursor: pointer;
+}
+
+.toast__action {
+  padding: 0 10px;
+  color: var(--toast-accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toast__close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  padding: 0;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.toast__action:hover,
+.toast__close:hover {
+  background: color-mix(in oklab, var(--toast-text) 10%, transparent);
 }
 
 .tag-row__manage {
@@ -1709,6 +1898,36 @@ div.modal__message p:last-child {
 
   .pills {
     display: flex;
+  }
+
+  /* Denser cards: a smaller avatar, three lines of text, no media. */
+  .post {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px 0;
+  }
+
+  .post > .avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .post__head {
+    font-size: 13px;
+  }
+
+  .post__text {
+    font-size: 14px;
+  }
+
+  .post__text--clamped {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .post .media {
+    display: none;
   }
 
   .settings {

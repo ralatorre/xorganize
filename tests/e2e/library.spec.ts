@@ -215,7 +215,8 @@ test('captures bookmarks and likes as they load, and keeps up with changes', asy
     .poll(() => texts(library, 'Likes'))
     .toEqual(['Shown on the page only', 'Seen at home', 'Like two', 'Bookmark three, also liked']);
   await expect(library.getByText('Page Author')).toBeVisible();
-  await expect(library.getByText('@page_author · Mar 1, 2024')).toBeVisible();
+  await expect(library.getByText('@page_author')).toBeVisible();
+  await expect(library.getByText('· Mar 1, 2024')).toBeVisible();
 
   // Each post links back to X and nowhere else.
   const links = await library
@@ -248,7 +249,7 @@ test('finds posts by their text and author, and keeps up with new ones', async (
   const library = await context.newPage();
   await library.goto(`chrome-extension://${extensionId}/library.html`);
   await expect.poll(() => counts(library)).toEqual(totals(5, 3, 3));
-  const status = library.getByRole('status');
+  const status = library.locator('.summary__count');
   const listed = () => library.locator('.posts .post__text').allTextContents();
 
   // `/` goes to the search box, unless it is typed into a field.

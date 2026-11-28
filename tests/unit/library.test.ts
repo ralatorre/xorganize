@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CapturedMedia } from '@/src/capture/normalise';
-import { formatDate, initialOf, plural } from '@/src/library/format';
+import { formatDate, initialOf, plural, postDate } from '@/src/library/format';
 import { MAX_THUMBNAILS, thumbnailsOf } from '@/src/library/thumbnails';
 
 describe('format', () => {
@@ -18,6 +18,17 @@ describe('format', () => {
         month: 'short',
         day: 'numeric',
       }),
+    );
+  });
+
+  it('leaves the year out of a post’s date within the current year', () => {
+    const time = Date.UTC(2026, 2, 12, 12);
+    const short = { month: 'short', day: 'numeric' } as const;
+    expect(postDate(time, Date.UTC(2026, 10, 27, 12))).toBe(
+      new Date(time).toLocaleDateString(undefined, short),
+    );
+    expect(postDate(time, Date.UTC(2027, 0, 2, 12))).toBe(
+      new Date(time).toLocaleDateString(undefined, { ...short, year: 'numeric' }),
     );
   });
 

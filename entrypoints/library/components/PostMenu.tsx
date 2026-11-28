@@ -1,62 +1,38 @@
-import { useRef, useState } from 'preact/hooks';
 import { Icon } from './Icon';
+import { Menu } from './Menu';
+import { MenuItem } from './MenuItem';
 
-/** The card's ⋯ menu: copy the link to the post, or take it out of the library. */
-export function PostMenu(props: { onCopyLink(): Promise<boolean>; onRemove(): void }) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState<boolean>();
-  const toggle = useRef<HTMLButtonElement>(null);
-  const close = () => {
-    setOpen(false);
-    toggle.current?.focus();
-  };
-
+/** The card's ⋯ menu (DESIGN, 4.5): every card action, with its shortcut. */
+export function PostMenu(props: {
+  onTag(): void;
+  onOpen(): void;
+  onCopyLink(): void;
+  onRemove(): void;
+}) {
   return (
-    <div
-      class="menu"
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape' || !open) return;
-        event.preventDefault();
-        close();
-      }}
+    <Menu
+      label="More actions"
+      buttonClass="icon-button icon-button--small"
+      button={<Icon name="more" size="small" />}
     >
-      <button
-        ref={toggle}
-        type="button"
-        class="icon-button icon-button--small"
-        aria-label="More actions"
-        aria-expanded={open}
-        onClick={() => {
-          setCopied(undefined);
-          setOpen(!open);
-        }}
+      <MenuItem before={<Icon name="tag" size="small" />} shortcut="t" onSelect={props.onTag}>
+        Edit tags
+      </MenuItem>
+      <MenuItem before={<Icon name="open" size="small" />} shortcut="o" onSelect={props.onOpen}>
+        Open on X
+      </MenuItem>
+      <MenuItem before={<Icon name="copy" size="small" />} onSelect={props.onCopyLink}>
+        Copy link
+      </MenuItem>
+      <div class="dropdown__separator" role="separator" />
+      <MenuItem
+        before={<Icon name="remove" size="small" />}
+        danger
+        detail="Its tags go with it. It comes back if it is still bookmarked or liked on X."
+        onSelect={props.onRemove}
       >
-        <Icon name="more" size="small" />
-      </button>
-      {open ? (
-        <span class="menu__items" role="group" aria-label="Post actions">
-          <button
-            type="button"
-            class="button button--small button--quiet"
-            onClick={() => void props.onCopyLink().then(setCopied)}
-          >
-            Copy link
-          </button>
-          <button
-            type="button"
-            class="button button--small button--quiet"
-            onClick={() => {
-              setOpen(false);
-              props.onRemove();
-            }}
-          >
-            Remove from library
-          </button>
-        </span>
-      ) : null}
-      <span role="status" class="menu__status">
-        {copied === undefined ? '' : copied ? 'Link copied' : 'Could not copy the link'}
-      </span>
-    </div>
+        Remove from library
+      </MenuItem>
+    </Menu>
   );
 }

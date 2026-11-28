@@ -34,6 +34,7 @@ import { PostList } from './components/PostList';
 import { SearchBox } from './components/SearchBox';
 import { SettingsPage } from './components/SettingsPage';
 import { ShortcutHelp } from './components/ShortcutHelp';
+import { Toasts } from './components/Toasts';
 import { Sidebar } from './components/Sidebar';
 import { SourcePills } from './components/SourcePills';
 import type { TagManagement } from './components/TagManager';
@@ -45,6 +46,7 @@ import { usePage, type Pages } from './use-page';
 import { useShortcuts } from './use-shortcuts';
 import { useTextSearch } from './use-text-search';
 import { useTheme, type ColourScheme } from './use-theme';
+import { useToasts } from './use-toasts';
 
 export interface LibraryProps {
   /** Reads the library's sources and tags. Re-run whenever the data it read changes. */
@@ -98,7 +100,6 @@ const VIEW_FORMATS: Record<ExportFormat, string> = { json: 'JSON', csv: 'CSV' };
 /** A question the library is asking, or the shortcut list. */
 type Dialog =
   | { kind: 'delete-tag'; tag: TagSuggestion }
-  | { kind: 'remove-post'; postId: PostId }
   | { kind: 'delete-all' }
   | { kind: 'shortcuts' }
   | { kind: 'filters' };
@@ -118,6 +119,7 @@ export function App(props: LibraryProps) {
   const [dialog, setDialog] = useState<Dialog>();
   const searchInput = useRef<HTMLInputElement>(null);
   const navigation = useRef<PostNavigation | undefined>(undefined);
+  const toasts = useToasts();
 
   const library = useLiveQuery(catalogue, EMPTY_CATALOGUE);
   const account = library?.account;
@@ -253,6 +255,7 @@ export function App(props: LibraryProps) {
         />
         {shared}
         {importDialog}
+        <Toasts shown={toasts.state.shown} onClose={toasts.close} />
       </div>
     );
   }
@@ -267,6 +270,7 @@ export function App(props: LibraryProps) {
         </main>
         {shared}
         {importDialog}
+        <Toasts shown={toasts.state.shown} onClose={toasts.close} />
       </div>
     );
   }
@@ -279,8 +283,20 @@ export function App(props: LibraryProps) {
   };
   const actions: PostActions = {
     onTag: (postId, button) => popover?.toggle(buttonAnchor(postId, button)),
-    onCopyLink: copy,
-    onRemove: (postId) => setDialog({ kind: 'remove-post', postId }),
+    onCopyLink: (url) =>
+      void copy(url).then((copied) =>
+        toasts.show(copied ? 'Link copied' : 'Could not copy the link'),
+      ),
+    // At once, with Undo: a question every time would slow triage (DESIGN, 8, decision 10).
+    onRemove: (postId) =>
+      void edits.removePost(accountId, postId).then((removed) => {
+        if (!removed) return;
+        toasts.show('Removed from library', {
+          label: 'Undo',
+          run: () => void edits.restorePost(removed),
+        });
+      }),
+    onShowTag: (tagId, add) => change({ type: 'tag', tagId, add }),
   };
   const reminder = backupReminder(library.backup, state.settings.backupReminderDays, time);
   const pickSource = (source: SourceFilter) => change({ type: 'source', source });
@@ -341,6 +357,7 @@ export function App(props: LibraryProps) {
               images={state.settings.remoteImages}
               actions={actions}
               navigation={navigation}
+              now={time}
             />
           ) : (
             <NoMatches onClear={() => change({ type: 'clear' })} />
@@ -368,21 +385,11 @@ export function App(props: LibraryProps) {
           }}
           onCancel={closeDialog}
         />
-      ) : dialog?.kind === 'remove-post' ? (
-        <ConfirmDialog
-          title="Remove this post from the library?"
-          message="Its tags are taken off. If it is still bookmarked or liked on X, it comes back the next time those pages load."
-          confirm="Remove"
-          onConfirm={() => {
-            void edits.removePost(accountId, dialog.postId);
-            closeDialog();
-          }}
-          onCancel={closeDialog}
-        />
       ) : (
         shared
       )}
       {importDialog}
+      <Toasts shown={toasts.state.shown} onClose={toasts.close} />
     </div>
   );
 }
