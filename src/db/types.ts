@@ -28,6 +28,12 @@ export interface StoredPost {
   bookmarkSort?: string;
   /** Position among likes. Present exactly when isLike is 1. */
   likeSort?: string;
+  /**
+   * When the post was seen to be unbookmarked or unliked, while it stayed for
+   * another reason. Absent while it is in that source.
+   */
+  unbookmarkedAt?: number;
+  unlikedAt?: number;
 
   /** Built from the page, not from the API, and waiting to be completed. */
   partial: boolean;

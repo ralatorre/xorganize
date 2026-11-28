@@ -137,7 +137,7 @@ The library is one application shown in two containers:
 - **Full tab** (`library.html`), opened from the toolbar popup or a shortcut. The primary view.
 - **Side panel**, a narrow single-column version docked beside x.com. Chromium only.
 
-> **As first built:** the library predates the look described here and in section 7. Since the first part of M5, it has the colours, type, buttons, icons and styled controls described in section 7, in all three themes. Since the second, it has the header bar with the account menu, `?` and the gear, the Settings page, a sidebar of sources and tags only, the 720 px list column, and the narrow layout with source pills and the filter sheet. Since the third, post cards are as described below, with Remove and Undo, copy results in a toast, and the tag popover opening from the start of its button in the library's own look; "No longer bookmarked" comes with live capture (M6). Since the fourth, the toolbar, the filters row, the backup reminder, No posts match, the empty library and the toasts are as described. Since the fifth, the sidebar's tags are too, which completes milestone M5, Look and feel (SPEC 17).
+> **As first built:** the library predates the look described here and in section 7. Since the first part of M5, it has the colours, type, buttons, icons and styled controls described in section 7, in all three themes. Since the second, it has the header bar with the account menu, `?` and the gear, the Settings page, a sidebar of sources and tags only, the 720 px list column, and the narrow layout with source pills and the filter sheet. Since the third, post cards are as described below, with Remove and Undo, copy results in a toast, and the tag popover opening from the start of its button in the library's own look. Since the fourth, the toolbar, the filters row, the backup reminder, No posts match, the empty library and the toasts are as described. Since the fifth, the sidebar's tags are too, which completes milestone M5, Look and feel (SPEC 17).
 
 Full tab layout:
 
@@ -194,7 +194,7 @@ Post card:
 - Media in one rounded frame, laid out as X does: one wide, two side by side, three as one tall and two small, four as a grid. Videos and gifs are their still image, with a "Video" or "GIF" badge.
 - A quoted post in its own rounded frame, with its author's small avatar, name, handle and date.
 - A footer row: the tag chips, then the tag button. With no tag it reads "Add tag"; with tags it is a small `+`. Clicking a chip shows that tag; `Ctrl`/`Cmd`+click adds it to the filter. The tag button opens the same tag popover as the inline button, below it and starting at its left edge.
-- A post X no longer serves shows an "Unavailable on X" label in the footer. One that has been unbookmarked shows "No longer bookmarked".
+- A post X no longer serves shows an "Unavailable on X" label in the footer. One that has been unbookmarked, and stays because it is liked or tagged, shows "No longer bookmarked"; one unliked, "No longer liked". The label goes if it is bookmarked or liked again.
 - **Actions**, at the right of the footer, shown while the card is hovered or has focus: Open on X (in a new tab), Copy link, and `⋯`. The `⋯` menu offers Edit tags, Open on X and Copy link, each with its shortcut, and Remove from library.
 - **Remove from library** acts at once, and a toast offers **Undo** while it shows. The menu item says, in a second line, that the post's tags go with it and that it comes back if it is still bookmarked or liked on X (decision 7).
 - The card has a quiet background on hover and a focus ring when it has keyboard focus.
@@ -248,11 +248,8 @@ Settings is a page of the library, opened from the gear in its header, with "Bac
 
 | Group | Setting | Default |
 | --- | --- | --- |
-| Capture | Capture bookmarks | On |
-| Capture | Capture likes | On |
 | Capture | Prompt for tags after bookmarking | On |
 | Capture | Prompt for tags after liking | Off |
-| Library | Keep posts after they are unbookmarked or unliked | Tagged posts only |
 | Appearance | Theme: Match X, System, Light, Dim or Dark, each shown as a small preview | Match X |
 | Privacy | Show images from X (avatars and thumbnails, loaded without cookies). Says that, turned off, the library makes no network request at all. | On |
 | Privacy | Stored in this browser: what the library holds for each account, and its size. Read only. | |
@@ -263,10 +260,11 @@ Settings is a page of the library, opened from the gear in its header, with "Bac
 | Backup and restore | Backup reminder | Every 30 days |
 | Danger zone | Delete all data | Requires typing a confirmation word. Deletes every account's posts, tags and tag assignments; keeps settings |
 
+- **Capture.** Bookmarks and likes are always both captured; there is no switch to stop one. The sidebar already keeps them apart, so someone who wants only bookmarks need never open Likes. Everything stays on the device either way, and a source that was off would leave the library following X for some posts and not others.
 - **Theme.** Match X uses the theme last seen on x.com: Light, Dim or Dark. Until x.com has been visited, it follows the system. System follows the system's light or dark setting. The tag button and popover on x.com always follow X, whatever the library uses.
 - The Danger zone panel has a red-tinted border, and its button is outlined in red. "Delete all data…" opens a dialog that says what goes and what stays: every post, tag and tag assignment, for every X account in this browser; settings stay, so that a choice such as not loading images from X is not undone; nothing on X changes. Its button stays disabled until "delete" is typed, in any case. Cancel has focus first. Afterwards the library shows its empty state, from which a backup can be restored.
 
-> **As first built:** the Settings page has the Appearance, Privacy, Backup and restore, and Danger zone groups. Match X and System preview the two themes they most often choose between, side by side. The Capture, Library and Shortcuts rows come with M6 and M7. The backup reminder shows in the library only until the popup (M7).
+> **As first built:** the Settings page has the Appearance, Privacy, Backup and restore, and Danger zone groups. Match X and System preview the two themes they most often choose between, side by side. The Capture rows come with the tag prompt (M6), and Shortcuts with M7. The backup reminder shows in the library only until the popup (M7).
 
 ## 5. Key flows
 
@@ -330,7 +328,7 @@ Export is a core feature, not only a safety net. There are two scopes and two fo
 
 ### 5.7 Unbookmark or unlike
 
-The post loses that source. Depending on the "Keep posts" setting it stays in the library (always, when it still has tags, by default) or is removed.
+The post loses that source. It stays in the library while it is still bookmarked, liked or tagged, and its card then says "No longer bookmarked" or "No longer liked". Otherwise it leaves the library. There is no setting for this: a post with no source and no tag would have no place in any view, and removing tagged posts would lose the user's tags (principle 2).
 
 ## 6. States and edge cases
 

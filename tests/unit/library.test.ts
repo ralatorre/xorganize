@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CapturedMedia } from '@/src/capture/normalise';
-import { formatDate, initialOf, plural, postDate } from '@/src/library/format';
+import type { StoredPost } from '@/src/db/types';
+import { formatDate, initialOf, plural, postDate, postLabels } from '@/src/library/format';
 import { MAX_THUMBNAILS, thumbnailsOf } from '@/src/library/thumbnails';
 
 describe('format', () => {
@@ -30,6 +31,25 @@ describe('format', () => {
     expect(postDate(time, Date.UTC(2027, 0, 2, 12))).toBe(
       new Date(time).toLocaleDateString(undefined, { ...short, year: 'numeric' }),
     );
+  });
+
+  it('notes hidden media, a post X no longer serves, and a source it has left', () => {
+    const photo: CapturedMedia = { kind: 'photo', url: 'https://pbs.twimg.com/media/a.jpg' };
+    const base = { media: [photo, photo], unavailable: false, isBookmark: 1, isLike: 0 } as Pick<
+      StoredPost,
+      'media' | 'unavailable' | 'isBookmark' | 'isLike'
+    >;
+    expect(postLabels(base, 2)).toEqual([]);
+    expect(postLabels({ ...base, unavailable: true }, 0)).toEqual([
+      '2 attachments',
+      'Unavailable on X',
+    ]);
+    expect(postLabels({ ...base, isBookmark: 0, unbookmarkedAt: 1, unlikedAt: 2 }, 2)).toEqual([
+      'No longer bookmarked',
+      'No longer liked',
+    ]);
+    // Back in the source: the old time no longer counts.
+    expect(postLabels({ ...base, unbookmarkedAt: 1 }, 2)).toEqual([]);
   });
 
   it.each([

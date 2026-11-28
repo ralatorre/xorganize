@@ -52,6 +52,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   backupReminderDays: 30,
   theme: 'x',
 };
+
 const SORT_WIDTH = 30;
 
 /**
@@ -130,6 +131,8 @@ export function mergePost(
   };
   const bookmarkSort = sort('bookmark', isBookmark, existing?.bookmarkSort);
   const likeSort = sort('like', isLike, existing?.likeSort);
+  const unbookmarkedAt = lostAt(existing?.isBookmark, isBookmark, existing?.unbookmarkedAt, now);
+  const unlikedAt = lostAt(existing?.isLike, isLike, existing?.unlikedAt, now);
 
   return {
     accountId: context.accountId,
@@ -139,12 +142,28 @@ export function mergePost(
     hasTags: existing?.hasTags ?? 0,
     ...(bookmarkSort !== undefined ? { bookmarkSort } : {}),
     ...(likeSort !== undefined ? { likeSort } : {}),
+    ...(unbookmarkedAt !== undefined ? { unbookmarkedAt } : {}),
+    ...(unlikedAt !== undefined ? { unlikedAt } : {}),
     partial: context.partial === true && !keepStored,
     unavailable: false,
     firstSeenAt: existing?.firstSeenAt ?? now,
     lastSeenAt: now,
     savedAt: existing?.savedAt ?? now,
   };
+}
+
+/**
+ * When a post left a source: now, if it was in it and is no longer; the time
+ * already recorded, if it was already out; nothing while it is in it.
+ */
+export function lostAt(
+  was: 0 | 1 | undefined,
+  is: 0 | 1,
+  recorded: number | undefined,
+  now: number,
+): number | undefined {
+  if (is) return undefined;
+  return was ? now : recorded;
 }
 
 /** The fields of a stored post that describe the post itself. */
@@ -201,14 +220,18 @@ export async function clearSource(
   accountId: AccountId,
   postId: PostId,
   source: SourceKind,
+  now = Date.now(),
 ): Promise<Counts> {
   return db.transaction('rw', db.posts, async () => {
     const post = await db.posts.get([accountId, postId]);
     if (post) {
-      if (source === 'bookmark') {
+      // A post cleared from a source it was not in keeps what it had.
+      if (source === 'bookmark' && post.isBookmark) {
+        post.unbookmarkedAt = now;
         post.isBookmark = 0;
         delete post.bookmarkSort;
-      } else {
+      } else if (source === 'like' && post.isLike) {
+        post.unlikedAt = now;
         post.isLike = 0;
         delete post.likeSort;
       }

@@ -237,6 +237,34 @@ test('captures bookmarks and likes as they load, and keeps up with changes', asy
   await expect.poll(() => banner(site)).toMatchObject({ hidden: true });
 });
 
+test('a post that leaves a source but stays says so, until it is back', async ({
+  context,
+  extensionId,
+}) => {
+  await serveStandIn(context);
+  const site = await context.newPage();
+  await site.goto('https://x.com/i/bookmarks');
+  await timeline(site, 'Bookmarks');
+  const library = await context.newPage();
+  await library.goto(`chrome-extension://${extensionId}/library.html`);
+  // Bookmark three is liked too, as the bookmarks timeline says.
+  await expect.poll(() => counts(library)).toEqual(totals(3, 3, 1));
+
+  // Unliked but still bookmarked, it stays, and its card says it is no longer liked.
+  await change(site, 'UnfavoriteTweet', '103');
+  await expect.poll(() => counts(library)).toEqual(totals(3, 3, 0));
+  const card = (text: string) => library.locator('article.post', { hasText: text });
+  await source(library, 'Bookmarks').click();
+  await expect(card('Bookmark three').locator('.post__label')).toHaveText('No longer liked');
+  await expect(card('Bookmark three').getByRole('img', { name: 'Liked' })).toHaveCount(0);
+  await expect(card('Bookmark two').locator('.post__label')).toHaveCount(0);
+
+  // Liked again, the note goes.
+  await change(site, 'FavoriteTweet', '103');
+  await expect.poll(() => counts(library)).toEqual(totals(3, 3, 1));
+  await expect(card('Bookmark three').locator('.post__label')).toHaveCount(0);
+});
+
 test('finds posts by their text and author, and keeps up with new ones', async ({
   context,
   extensionId,

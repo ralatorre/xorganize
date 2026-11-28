@@ -1,7 +1,7 @@
 import { useRef } from 'preact/hooks';
 import type { TagId } from '@/src/db/types';
 import { xImageUrl } from '@/src/hosts';
-import { plural, postDate } from '@/src/library/format';
+import { postDate, postLabels } from '@/src/library/format';
 import type { PostView } from '@/src/library/posts';
 import { thumbnailsOf } from '@/src/library/thumbnails';
 import { Avatar } from './Avatar';
@@ -75,10 +75,11 @@ export function PostCard(props: {
         {quoted ? <QuotedPost post={quoted} images={images} now={now} /> : null}
         <footer class="post__foot">
           <PostTags tags={tags} onShow={actions.onShowTag} onTag={tag} buttonRef={tagButton} />
-          {post.media.length > thumbnails.length ? (
-            <span class="post__label">{plural(post.media.length, 'attachment')}</span>
-          ) : null}
-          {post.unavailable ? <span class="post__label">Unavailable on X</span> : null}
+          {postLabels(post, thumbnails.length).map((label) => (
+            <span key={label} class="post__label">
+              {label}
+            </span>
+          ))}
           <div class="post__actions">
             <a
               ref={link}

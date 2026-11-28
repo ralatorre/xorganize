@@ -280,6 +280,7 @@ describe('parseBackup', () => {
     ['a position in another form', { bookmarkSort: 'sort-1' }],
     ['a partial flag that is not true or false', { partial: 0 }],
     ['a time that is not a number', { savedAt: 'today' }],
+    ['a time a source was lost that is not a number', { unlikedAt: 'yesterday' }],
     ['a list that is not a list', { media: {} }],
     ['a media entry that is not an object', { media: ['https://pbs.twimg.com/a.jpg'] }],
   ])('refuses a post with %s', (_, changes) => {
@@ -288,6 +289,12 @@ describe('parseBackup', () => {
       section: 'posts',
       position: 1,
     });
+  });
+
+  it('keeps when a source was lost, only while the post is out of it', () => {
+    const backup = parsed(postWith({ unlikedAt: DAY, unbookmarkedAt: DAY }));
+    expect(backup.posts[0]).toMatchObject({ unlikedAt: DAY });
+    expect(backup.posts[0]).not.toHaveProperty('unbookmarkedAt');
   });
 
   it('accepts every kind of position a source can have', () => {
@@ -467,6 +474,19 @@ describe('mergeImported', () => {
     );
     expect(none).not.toHaveProperty('bookmarkSort');
     expect(none).not.toHaveProperty('likeSort');
+  });
+
+  it('keeps when a source was lost while neither copy is in it', () => {
+    const unliked = post('1', { unlikedAt: DAY, lastSeenAt: DAY });
+    expect(mergeImported(unliked, incoming({ lastSeenAt: DAY + 1 }), ACCOUNT, NOW).unlikedAt).toBe(
+      DAY,
+    );
+    expect(
+      mergeImported(unliked, incoming({ unlikedAt: DAY + 1, lastSeenAt: DAY + 1 }), ACCOUNT, NOW)
+        .unlikedAt,
+    ).toBe(DAY + 1);
+    const likedAgain = incoming({ isLike: 1, likeSort: sortKey('3'), lastSeenAt: DAY - 1 });
+    expect(mergeImported(unliked, likedAgain, ACCOUNT, NOW)).not.toHaveProperty('unlikedAt');
   });
 
   it('follows the newer copy on whether X still has the post', () => {
