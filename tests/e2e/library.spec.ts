@@ -249,7 +249,7 @@ test('finds posts by their text and author, and keeps up with new ones', async (
   const library = await context.newPage();
   await library.goto(`chrome-extension://${extensionId}/library.html`);
   await expect.poll(() => counts(library)).toEqual(totals(5, 3, 3));
-  const status = library.locator('.summary__count');
+  const status = library.locator('.toolbar__count');
   const listed = () => library.locator('.posts .post__text').allTextContents();
 
   // `/` goes to the search box, unless it is typed into a field.
@@ -283,9 +283,21 @@ test('finds posts by their text and author, and keeps up with new ones', async (
   await expect.poll(listed).toEqual(['Seen at home']);
   await expect(status).toHaveText('1 post');
 
-  // Clearing the filters clears the search too.
+  // No match names the search and the source, and offers to clear the search.
   await search.fill('nothing like this');
-  await library.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(
+    library.getByText('Nothing in All posts matches “nothing like this”.'),
+  ).toBeVisible();
+  await library.getByRole('button', { name: 'Clear search' }).first().click();
+  await expect(search).toHaveValue('');
+  await expect(status).toHaveText('6 posts');
+
+  // Clear all, in the filters row, clears the search too.
+  await search.fill('nothing like this');
+  await library
+    .getByRole('group', { name: 'Filters' })
+    .getByRole('button', { name: 'Clear all' })
+    .click();
   await expect(search).toHaveValue('');
   await expect(status).toHaveText('6 posts');
 });
@@ -454,6 +466,7 @@ test('shows images from X without cookies or a referrer, and none once turned of
   // Turned off, no image is requested, and that survives a reload.
   await openSettings(library);
   await library.getByRole('switch', { name: 'Show images from X' }).uncheck();
+  await expect(library.getByRole('switch', { name: 'Show images from X' })).not.toBeChecked();
   await backToLibrary(library);
   await expect(library.locator('.post')).toHaveCount(3);
   await expect(library.locator('img')).toHaveCount(0);

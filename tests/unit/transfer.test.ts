@@ -2,7 +2,13 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { LibraryDatabase } from '@/src/db/schema';
 import type { PostTag, StoredPost, Tag, TagSuggestion } from '@/src/db/types';
-import { exportStatus, viewScope } from '@/src/library/view-export';
+import {
+  EXPORT_FAILED,
+  backupMessage,
+  exportMenuLabel,
+  exportMessage,
+  viewScope,
+} from '@/src/library/view-export';
 import { CSV_COLUMNS, csvCell, csvParts, csvRow } from '@/src/transfer/csv';
 import { exportPosts } from '@/src/transfer/export';
 import { MAX_NAME_IN_FILE, exportFilename, fileSafe } from '@/src/transfer/filename';
@@ -318,10 +324,15 @@ describe('viewScope', () => {
   });
 });
 
-describe('exportStatus', () => {
+describe('export messages', () => {
   it('says how many posts went out, or that the export failed', () => {
-    expect(exportStatus(1)).toBe('Exported 1 post');
-    expect(exportStatus(2)).toBe('Exported 2 posts');
-    expect(exportStatus(undefined)).toBe('Could not export. Try again.');
+    const name = 'xorganize-export-2026-01-02.json';
+    expect(exportMessage({ count: 1, name }, 'json')).toBe('Exported 1 post as JSON');
+    expect(exportMessage({ count: 37, name }, 'csv')).toBe('Exported 37 posts as CSV');
+    expect(exportMessage(undefined, 'csv')).toBe(EXPORT_FAILED);
+    expect(backupMessage({ count: 2, name })).toBe(`Backup saved: ${name}`);
+    expect(backupMessage(undefined)).toBe(EXPORT_FAILED);
+    expect(exportMenuLabel(1)).toBe('Export the post in this view');
+    expect(exportMenuLabel(37)).toBe('Export the 37 posts in this view');
   });
 });

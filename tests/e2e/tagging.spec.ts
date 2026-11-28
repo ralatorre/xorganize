@@ -381,32 +381,38 @@ test('a post tagged on X can be found in the library by its tags', async ({
   await sidebarTag(library, 'Rust').click();
   await expect.poll(() => listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
   await sidebarTag(library, 'to read').click({ modifiers: ['Control'] });
-  await expect(library.locator('.summary__count')).toHaveText('1 post');
+  await expect(library.locator('.toolbar__count')).toHaveText('1 post');
   await expect.poll(() => listed(library)).toEqual(['Seen in a timeline']);
   await library.getByRole('radio', { name: 'Any' }).check();
-  await expect(library.locator('.summary__count')).toHaveText('2 posts');
+  await expect(library.locator('.toolbar__count')).toHaveText('2 posts');
   await library.getByRole('button', { name: 'Remove filter Rust' }).click();
-  await expect(library.locator('.summary__count')).toHaveText('1 post');
+  await expect(library.locator('.toolbar__count')).toHaveText('1 post');
 
   // A tag added on X shows at once.
   await tagFromPage(site, '102', ['to read']);
-  await expect(library.locator('.summary__count')).toHaveText('2 posts');
+  await expect(library.locator('.toolbar__count')).toHaveText('2 posts');
   await expect(sidebarTag(library, 'to read')).toContainText('2');
 
   // A filter that matches nothing offers a way back.
   await library.getByRole('button', { name: /^Bookmarks 0$/ }).click();
   await expect(library.getByRole('heading', { name: 'No posts match' })).toBeVisible();
-  await library.getByRole('button', { name: 'Clear filters' }).click();
-  await expect(library.locator('.summary__count')).toHaveText('2 posts');
+  await expect(library.getByText('Nothing in Bookmarks matches these filters.')).toBeVisible();
+  await expect(library.getByRole('button', { name: 'Clear search' })).toHaveCount(0);
+  await library.getByRole('button', { name: 'Show all posts' }).click();
+  await expect(library.locator('.toolbar__count')).toHaveText('2 posts');
 
   // Ordered by post date: the newer ID first.
-  await library.getByRole('combobox', { name: 'Sort:' }).selectOption('posted');
+  await library.getByRole('button', { name: 'Sort: Date saved' }).click();
+  const sort = library.getByRole('menu', { name: 'Sort' });
+  await expect(sort.getByRole('menuitemradio', { name: /^Date saved/ })).toBeFocused();
+  await sort.getByRole('menuitemradio', { name: /^Date posted/ }).click();
+  await expect(library.getByRole('button', { name: 'Sort: Date posted' })).toBeFocused();
   await expect.poll(() => listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
 
   // Found by typing its tag, and by its text.
   const search = library.getByRole('searchbox', { name: 'Search posts' });
   await search.fill('#"to read" #rus');
-  await expect(library.locator('.summary__count')).toHaveText('2 posts');
+  await expect(library.locator('.toolbar__count')).toHaveText('2 posts');
   await search.fill('#"dev/web"');
   await expect.poll(() => listed(library)).toEqual(['Only on the page']);
   await search.fill('timeline #rust');
@@ -429,7 +435,7 @@ test('tags are renamed, recoloured, merged and deleted in the library, and x.com
   await library.getByRole('button', { name: 'Manage Rust' }).click();
   await library.getByRole('button', { name: 'Rename' }).click();
   await library.getByRole('textbox', { name: 'New name' }).fill('Rust lang');
-  await library.getByRole('button', { name: 'Save' }).click();
+  await library.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(sidebarTag(library, 'Rust lang')).toContainText('2');
   await expect
     .poll(() => tagButtons(site))
@@ -439,7 +445,7 @@ test('tags are renamed, recoloured, merged and deleted in the library, and x.com
   await library.getByRole('button', { name: 'Manage to read' }).click();
   await library.getByRole('button', { name: 'Rename' }).click();
   await library.getByRole('textbox', { name: 'New name' }).fill('rust LANG');
-  await library.getByRole('button', { name: 'Save' }).click();
+  await library.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(library.getByRole('alert')).toHaveText(
     'Another tag has that name. Merge into it instead.',
   );

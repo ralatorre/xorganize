@@ -20,13 +20,13 @@ export function Header(props: {
   onHelp(): void;
 }) {
   const { page, filters } = props;
-  const name = <span class="brand__name">xorganize</span>;
+
   return (
     <header class="header">
       <div class="header__inner">
         <div class="brand">
           <Mark />
-          {page === 'library' ? <h1 class="brand__heading">{name}</h1> : name}
+          <span class="brand__name">xorganize</span>
         </div>
         {page === 'settings' ? (
           <a class="button button--quiet button--small header__back" href="#">

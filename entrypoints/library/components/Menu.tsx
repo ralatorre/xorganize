@@ -11,8 +11,10 @@ const ITEMS = '[role="menuitem"], [role="menuitemradio"]';
  * pressed in the menu do not reach the library's shortcuts.
  */
 export function Menu(props: {
-  /** The menu's accessible name, and the button's when its content is not text. */
+  /** The menu's accessible name, and the button's tooltip. */
   label: string;
+  /** The button's accessible name, when its content does not say enough. */
+  buttonLabel?: string;
   buttonClass: string;
   /** What the button shows. */
   button: ComponentChildren;
@@ -50,6 +52,7 @@ export function Menu(props: {
         ref={button}
         type="button"
         class={props.buttonClass}
+        aria-label={props.buttonLabel}
         aria-haspopup="menu"
         aria-expanded={open}
         title={props.label}

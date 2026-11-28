@@ -5,6 +5,7 @@ import { DAY_MS, lastBackupLine } from '@/src/library/backup-reminder';
 import { menuIndex } from '@/src/library/menu';
 import { pageOf } from '@/src/library/route';
 import { NO_TOAST, changeToast } from '@/src/library/toast';
+import { noMatchLine, viewTitle } from '@/src/library/toolbar';
 
 const ACCOUNT = '9000000000000000001';
 const OTHER = '9000000000000000002';
@@ -128,5 +129,22 @@ describe('changeToast', () => {
     const second = changeToast(first, { type: 'show', message: 'Two' });
     expect(changeToast(second, { type: 'close', id: 1 })).toBe(second);
     expect(changeToast(second, { type: 'close', id: 2 }).shown).toBeUndefined();
+  });
+});
+
+describe('the toolbar', () => {
+  it('titles the view by its tag when one tag is chosen among all posts', () => {
+    expect(viewTitle('all', [{ name: 'rust' }])).toBe('rust');
+    expect(viewTitle('all', [])).toBe('All posts');
+    expect(viewTitle('all', [{ name: 'rust' }, { name: 'go' }])).toBe('All posts');
+    expect(viewTitle('bookmarks', [{ name: 'rust' }])).toBe('Bookmarks');
+  });
+
+  it.each([
+    ['bookmarks', 'tokio', 0, 'Nothing in Bookmarks matches “tokio”.'],
+    ['all', '  tokio ', 2, 'Nothing in All posts matches “tokio” with these tags.'],
+    ['untagged', '', 1, 'Nothing in Untagged matches these filters.'],
+  ] as const)('says why nothing in %s matches %j', (source, query, tags, line) => {
+    expect(noMatchLine(source, query, tags)).toBe(line);
   });
 });

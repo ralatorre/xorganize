@@ -10,12 +10,18 @@ import { exportPosts, type ExportedFile } from '@/src/transfer/export';
 import type { ExportFormat } from '@/src/transfer/format';
 import type { ExportScope } from '@/src/transfer/read';
 
-/** Exports, and resolves to how many posts, or undefined if it failed. */
+/** What an export saved: how many posts, in a file of this name. */
+export interface Exported {
+  count: number;
+  name: string;
+}
+
+/** Exports, and resolves to what was saved, or undefined if it failed. */
 export type LibraryExport = (
   accountId: AccountId,
   scope: ExportScope,
   format: ExportFormat,
-) => Promise<number | undefined>;
+) => Promise<Exported | undefined>;
 
 /** Only this can restore the library, so only this counts as a backup. */
 export const isBackup = (scope: ExportScope, format: ExportFormat) =>
@@ -32,7 +38,7 @@ export function createLibraryExport(
       const file = await exportPosts(db, accountId, scope, format, time);
       save(file);
       if (isBackup(scope, format)) await recordBackup(db, accountId, time.getTime());
-      return file.count;
+      return { count: file.count, name: file.name };
     } catch {
       return undefined;
     }

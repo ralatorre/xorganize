@@ -64,8 +64,13 @@ test('library page renders its empty state', async ({ context, extensionId }) =>
   await page.goto(`chrome-extension://${extensionId}/library.html`);
 
   await expect(page).toHaveTitle('xorganize');
-  await expect(page.getByRole('heading', { level: 1, name: 'xorganize' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Your library is empty' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Your library is empty' }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open my bookmarks on X' })).toHaveAttribute(
+    'href',
+    'https://x.com/i/bookmarks',
+  );
   expect(violations).toEqual([]);
   // The library's own text size (DESIGN, 7.2), not the smaller one browsers give extension pages.
   expect(await page.evaluate(() => getComputedStyle(document.body).fontSize)).toBe('14px');

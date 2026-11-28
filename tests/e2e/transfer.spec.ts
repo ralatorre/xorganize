@@ -93,13 +93,17 @@ async function save(page: Page, button: string): Promise<Download> {
   return file;
 }
 
-async function download(page: Page, group: string, format: string): Promise<Download> {
+/** Exports the view from the toolbar's Export menu. */
+async function download(page: Page, format: 'JSON' | 'CSV'): Promise<Download> {
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   const [file] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('group', { name: group }).getByRole('button', { name: format }).click(),
+    page.getByRole('menuitem', { name: new RegExp(`^${format}`) }).click(),
   ]);
   return file;
 }
+
+const toast = (page: Page) => page.locator('.toasts');
 
 const contents = async (file: Download) => readFile((await file.path())!, 'utf8');
 
@@ -115,7 +119,7 @@ test('exports the view and the whole library, as JSON and CSV', async ({
   await openLibrary(page, extensionId);
 
   // The view, as JSON: every post listed, marked as part of the library.
-  const view = await download(page, 'Export view', 'JSON');
+  const view = await download(page, 'JSON');
   expect(view.suggestedFilename()).toMatch(/^xorganize-export-\d{4}-\d{2}-\d{2}\.json$/);
   const viewJson = JSON.parse(await contents(view));
   expect(viewJson).toMatchObject({ format: 'xorganize', version: 1, scope: 'partial' });
@@ -124,7 +128,7 @@ test('exports the view and the whole library, as JSON and CSV', async ({
     'recipes',
     'rust',
   ]);
-  await expect(page.getByRole('group', { name: 'Export view' })).toContainText('Exported 3 posts');
+  await expect(toast(page)).toHaveText('Exported 3 posts as JSON');
 
   // One tag, as CSV: named after it, with formulas neutralised.
   await page
@@ -132,7 +136,7 @@ test('exports the view and the whole library, as JSON and CSV', async ({
     .getByRole('button', { name: /^recipes 2$/ })
     .click();
   await expect(page.locator('.posts .post__text')).toHaveCount(2);
-  const recipes = await download(page, 'Export view', 'CSV');
+  const recipes = await download(page, 'CSV');
   expect(recipes.suggestedFilename()).toMatch(/^xorganize-export-recipes-\d{4}-\d{2}-\d{2}\.csv$/);
   const rows = (await contents(recipes)).split('\r\n');
   expect(rows[0]).toBe(
@@ -145,7 +149,7 @@ test('exports the view and the whole library, as JSON and CSV', async ({
   await openSettings(page);
   await expect(page.getByText('Never backed up.')).toBeVisible();
   const backup = await save(page, 'Back up now');
-  await expect(page.getByText('Exported 3 posts')).toBeVisible();
+  await expect(toast(page)).toHaveText(/^Backup saved: xorganize-export-\d{4}-\d{2}-\d{2}\.json$/);
   await expect(page.getByText('Last backed up today.')).toBeVisible();
   expect(backup.suggestedFilename()).toMatch(/^xorganize-export-\d{4}-\d{2}-\d{2}\.json$/);
   const backupJson = JSON.parse(await contents(backup));
@@ -187,7 +191,7 @@ test('a backup restores the library in a clean profile', async ({ context, exten
   const page = await context.newPage();
   await openLibrary(page, extensionId);
   const viewPath = info.outputPath('view.json');
-  await (await download(page, 'Export view', 'JSON')).saveAs(viewPath);
+  await (await download(page, 'JSON')).saveAs(viewPath);
   await openSettings(page);
   const backupPath = info.outputPath('backup.json');
   const original = await contents(await save(page, 'Back up now'));
@@ -315,7 +319,7 @@ test('reminds of a backup until one is made, put off, or turned off', async ({
   // Written past Dexie, so the page reads it again only on reload.
   await page.reload();
   await expect(reminder).toBeVisible();
-  await download(page, 'Export view', 'JSON');
+  await download(page, 'JSON');
   await openSettings(page);
   await save(page, 'Export CSV');
   await backToLibrary(page);

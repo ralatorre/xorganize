@@ -4,7 +4,6 @@ import type { AccountId, Settings, StoredAccount, ThemeSetting } from '@/src/db/
 import { sizeLine, storedLine } from '@/src/library/accounts';
 import { REMINDER_CHOICES } from '@/src/library/backup-reminder';
 import type { IconName } from '../icons';
-import { ExportButton } from './ExportButton';
 import { Icon } from './Icon';
 import { Select } from './Select';
 import { SettingRow } from './SettingRow';
@@ -22,8 +21,9 @@ const GROUPS: ReadonlyArray<{ id: string; title: string; icon: IconName }> = [
 export interface SettingsExports {
   /** When the last backup was made, as a line to show. */
   lastBackup: string;
-  backUp(): Promise<number | undefined>;
-  exportCsv(): Promise<number | undefined>;
+  /** Each says what it did in a toast. */
+  backUp(): void;
+  exportCsv(): void;
 }
 
 /**
@@ -116,19 +116,19 @@ export function SettingsPage(props: {
           {exports ? (
             <>
               <SettingRow id="back-up" title="Back up the library" description={exports.lastBackup}>
-                <ExportButton class="button button--primary" onExport={exports.backUp}>
+                <button type="button" class="button button--primary" onClick={exports.backUp}>
                   <Icon name="export" size="small" />
                   Back up now
-                </ExportButton>
+                </button>
               </SettingRow>
               <SettingRow
                 id="csv"
                 title="Export as CSV"
                 description="One row per post, for spreadsheets. It cannot be imported again."
               >
-                <ExportButton class="button" onExport={exports.exportCsv}>
+                <button type="button" class="button" onClick={exports.exportCsv}>
                   Export CSV
-                </ExportButton>
+                </button>
               </SettingRow>
             </>
           ) : null}
