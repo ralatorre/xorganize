@@ -6,7 +6,7 @@
 
 import { DIAGNOSTICS } from '@/src/build';
 import type { TagChange } from '@/src/db/tags';
-import type { Counts, TagSuggestion, TagSummary } from '@/src/db/types';
+import type { AccountProfile, Counts, TagSuggestion, TagSummary } from '@/src/db/types';
 import type { Theme } from '@/src/dom/theme';
 import type { EnvironmentObservation } from '@/src/diagnostics/environment';
 import type { OperationObservation } from '@/src/diagnostics/observe';
@@ -63,8 +63,8 @@ export interface WorkerDependencies {
   tags: TagStore;
   /** Keeps the theme x.com shows, for the library's Match X. */
   recordTheme(theme: Theme): Promise<unknown>;
-  /** Keeps the @handle x.com shows for an account, for the library's header. */
-  recordHandle(accountId: string, handle: string): Promise<unknown>;
+  /** Keeps the @handle and picture x.com shows for an account, for the library's header. */
+  recordProfile(accountId: string, profile: AccountProfile): Promise<unknown>;
   /** Tells every listening page that a post's tags changed. */
   notify(message: TagsChangedMessage): void;
   /** Present only in the diagnostics build. Without it, diagnostics messages are ignored. */
@@ -77,6 +77,11 @@ export type Reply =
 /** True for this extension's own content scripts, in the top frame of a supported page. */
 export function isTrustedSender(sender: MessageSender, extensionId: string): boolean {
   return sender.id === extensionId && sender.frameId === 0 && isSupportedUrl(sender.url);
+}
+
+/** Only the profile's own fields, whatever else the message carried. */
+function profileIn({ handle, avatarUrl }: AccountProfile): AccountProfile {
+  return avatarUrl === undefined ? { handle } : { handle, avatarUrl };
 }
 
 /**
@@ -93,7 +98,7 @@ export function createWorkerHandler(deps: WorkerDependencies) {
       const recorded =
         message.type === 'theme/seen'
           ? deps.recordTheme(message.theme)
-          : deps.recordHandle(message.accountId, message.handle);
+          : deps.recordProfile(message.accountId, profileIn(message));
       return recorded.then(
         () => ({ ok: true }),
         () => ({ ok: false }),

@@ -13,9 +13,10 @@ import { createTagger } from '@/src/inline/tagger';
 import { createChangeReport } from '@/src/inline/change-report';
 import { createTagsListener, type ListeningPort } from '@/src/inline/tags-port';
 import { SELECTORS } from '@/src/dom/selectors';
-import { handleOfProfileLink } from '@/src/dom/viewer-handle';
+import { avatarOfImage, avatarSelector, handleOfProfileLink } from '@/src/dom/viewer-profile';
 import {
   MAX_SUGGESTIONS,
+  type AccountSeenMessage,
   type RuntimeMessage,
   type TagsForPostsReply,
   type TagsSetReply,
@@ -25,6 +26,8 @@ import { createPopover } from '@/src/ui/popover';
 import { startMounter } from './mounter';
 import { createTagButton, type TagButton } from './tag-button';
 import { watchTheme } from './theme-watcher';
+
+type AccountSeen = Omit<AccountSeenMessage, 'type'>;
 
 export interface InlineTaggingDependencies {
   send<Reply>(message: RuntimeMessage): Promise<Reply | undefined>;
@@ -50,16 +53,20 @@ export function startInlineTagging(deps: InlineTaggingDependencies): void {
       void deps.send({ type: 'theme/seen', theme: seen });
     }),
   );
-  // The account's handle, for the library's header. Only the handle is read.
-  const reportAccount = createChangeReport<{ accountId: string; handle: string }>(
+  // The account's handle and picture, for the library's header. Nothing else is read.
+  const reportAccount = createChangeReport<AccountSeen>(
     (seen) => void deps.send({ type: 'account/seen', ...seen }),
-    ({ accountId, handle }) => `${accountId} ${handle}`,
+    ({ accountId, handle, avatarUrl }) => `${accountId} ${handle} ${avatarUrl ?? ''}`,
   );
   const checkAccount = () => {
     const accountId = deps.accountId();
     const link = document.querySelector(SELECTORS.profileLink);
     const handle = handleOfProfileLink(link?.getAttribute('href'));
-    if (accountId !== undefined && handle !== undefined) reportAccount({ accountId, handle });
+    if (accountId === undefined || handle === undefined) return;
+    const switcher = document.querySelector(SELECTORS.accountSwitcher);
+    const avatar = switcher?.querySelector(avatarSelector(handle));
+    const avatarUrl = avatarOfImage(avatar?.getAttribute('src'));
+    reportAccount(avatarUrl ? { accountId, handle, avatarUrl } : { accountId, handle });
   };
 
   const withAccount = <Message extends RuntimeMessage>(build: (accountId: string) => Message) => {

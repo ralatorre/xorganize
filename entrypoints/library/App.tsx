@@ -204,7 +204,12 @@ export function App(props: LibraryProps) {
   const empty = state.account === undefined || state.counts.all === 0;
   const accountId = empty ? undefined : state.account;
   const accountMenu = (
-    <AccountMenu accounts={library.accounts} shown={accountId} onChoose={chooseAccount} />
+    <AccountMenu
+      accounts={library.accounts}
+      shown={accountId}
+      images={state.settings.remoteImages}
+      onChoose={chooseAccount}
+    />
   );
   const help = () => setDialog({ kind: 'shortcuts' });
 

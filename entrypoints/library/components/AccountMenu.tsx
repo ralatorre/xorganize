@@ -1,9 +1,14 @@
 import type { AccountId, StoredAccount } from '@/src/db/types';
 import { accountLabel } from '@/src/library/accounts';
+import { AccountAvatar } from './AccountAvatar';
 import { plural } from '@/src/library/format';
 import { Icon } from './Icon';
 import { Menu } from './Menu';
 import { MenuItem } from './MenuItem';
+
+/** Picture sizes in pixels: in the header, and in the menu. */
+const HEADER_AVATAR = 28;
+const MENU_AVATAR = 24;
 
 /**
  * The X account whose library is shown (DESIGN, 4.5 and 6). With more than
@@ -12,6 +17,8 @@ import { MenuItem } from './MenuItem';
 export function AccountMenu(props: {
   accounts: readonly StoredAccount[];
   shown: AccountId | undefined;
+  /** Whether pictures may load from X. */
+  images: boolean;
   onChoose(accountId: AccountId): void;
 }) {
   const shown = props.accounts.find(({ accountId }) => accountId === props.shown);
@@ -19,9 +26,7 @@ export function AccountMenu(props: {
   const label = accountLabel(shown);
   const content = (
     <>
-      <span class="account__avatar">
-        <Icon name="account" size="small" />
-      </span>
+      <AccountAvatar account={shown} images={props.images} size={HEADER_AVATAR} />
       <span class="account__name">{label}</span>
     </>
   );
@@ -51,6 +56,7 @@ export function AccountMenu(props: {
           key={account.accountId}
           checked={account.accountId === props.shown}
           detail={plural(account.posts, 'post')}
+          before={<AccountAvatar account={account} images={props.images} size={MENU_AVATAR} />}
           onSelect={() => props.onChoose(account.accountId)}
         >
           {accountLabel(account)}

@@ -5,12 +5,28 @@ const VIEWER = '9000000000000000001';
 const SECOND = '9000000000000000002';
 const DAY = Date.UTC(2026, 0, 2);
 
-/** A stand-in for x.com that shows only the link to the signed-in account's profile. */
+const AVATAR = 'https://pbs.twimg.com/profile_images/1/example_normal.jpg';
+
+/** A 1×1 PNG. */
+const PIXEL = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64',
+);
+
+/**
+ * A stand-in for x.com that shows only what identifies the signed-in account:
+ * the link to its profile, and X's account button with its picture.
+ */
 const STAND_IN_PAGE = `<!doctype html>
 <html>
   <head><title>stand-in</title></head>
   <body style="background: rgb(255, 255, 255)">
-    <nav><a data-testid="AppTabBar_Profile_Link" href="/example_user">Profile</a></nav>
+    <nav>
+      <a data-testid="AppTabBar_Profile_Link" href="/example_user">Profile</a>
+      <button data-testid="SideNav_AccountSwitcher_Button">
+        <div data-testid="UserAvatar-Container-example_user"><img src="${AVATAR}" alt="" /></div>
+      </button>
+    </nav>
     <main data-testid="primaryColumn"></main>
   </body>
 </html>`;
@@ -22,6 +38,14 @@ async function serveStandIn(context: BrowserContext) {
   await context.route('https://x.com/**', (route) =>
     route.fulfill({ contentType: 'text/html', body: STAND_IN_PAGE }),
   );
+  await context.route('https://pbs.twimg.com/**', async (route) => {
+    const headers = await route.request().allHeaders();
+    await route.fulfill({
+      contentType: 'image/png',
+      body: PIXEL,
+      headers: { 'access-control-allow-origin': headers.origin ?? '' },
+    });
+  });
 }
 
 const post = (accountId: string, id: string, text: string, tagged = false) => ({
@@ -118,6 +142,9 @@ test('names the account from x.com, and switches between the accounts in this br
   await site.goto('https://x.com/home');
   const named = library.getByRole('button', { name: '@example_user' });
   await expect(named).toBeVisible();
+  await expect(named.locator('img')).toHaveAttribute('src', AVATAR);
+  await expect(named.locator('img')).toHaveAttribute('crossorigin', 'anonymous');
+  await expect(named.locator('img')).toHaveAttribute('referrerpolicy', 'no-referrer');
 
   // The menu lists both accounts, the shown one ticked; Esc puts focus back.
   await named.click();
@@ -136,6 +163,24 @@ test('names the account from x.com, and switches between the accounts in this br
   await accounts.getByRole('menuitemradio', { name: /···0002/ }).click();
   await expect(texts(library)).toHaveText(['A post of the second account']);
   await expect(library.getByRole('button', { name: 'X account ···0002' })).toBeFocused();
+});
+
+test('shows no picture of the account once images from X are off', async ({
+  context,
+  extensionId,
+}) => {
+  await serveStandIn(context);
+  const library = await context.newPage();
+  await openSeeded(library, extensionId);
+  const site = await context.newPage();
+  await site.goto('https://x.com/home');
+  const named = library.getByRole('button', { name: '@example_user' });
+  await expect(named.locator('img')).toHaveCount(1);
+
+  await openSettings(library);
+  await library.getByRole('switch', { name: 'Show images from X' }).uncheck();
+  await expect(library.locator('.header img')).toHaveCount(0);
+  await expect(library.locator('.header .account__avatar .icon')).toHaveCount(1);
 });
 
 test('Settings is a page of its own, which Back leaves', async ({ context, extensionId }) => {

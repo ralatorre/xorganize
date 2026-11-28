@@ -162,7 +162,7 @@ Full tab layout:
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Header bar**, across the top: the extension's mark and name; the search box, with `/` shown as its shortcut; `?` for the keyboard shortcuts; the gear for Settings (4.7); and the X account shown, as a menu that switches between the accounts this browser holds (6). An account is named by its @handle, as last seen on x.com, and by the end of its ID until then.
+**Header bar**, across the top: the extension's mark and name; the search box, with `/` shown as its shortcut; `?` for the keyboard shortcuts; the gear for Settings (4.7); and the X account shown, as a menu that switches between the accounts this browser holds (6). An account is named by its @handle, as last seen on x.com, and by the end of its ID until then. Its picture from X is shown beside it while images from X are on.
 
 **Width.** The page is centred, at most 1180 px wide: a 236 px sidebar and a list column of at most 720 px, so post text stays near X's own line length. Below 720 px the side panel layout below takes over.
 

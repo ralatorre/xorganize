@@ -61,8 +61,8 @@ function setup(outcome: 'stored' | 'failed' = 'stored') {
       set: (change) => (changes.push(change), result([RUST])),
     },
     recordTheme: (theme) => (themes.push(theme), result(undefined)),
-    recordHandle: (accountId, handle) => (
-      handles.push(`${accountId} ${handle}`),
+    recordProfile: (accountId, profile) => (
+      handles.push(`${accountId} ${JSON.stringify(profile)}`),
       result(undefined)
     ),
     notify: (message) => void notified.push(message),
@@ -104,11 +104,21 @@ describe('createWorkerHandler', () => {
     expect(await setup('failed').handle(message, FROM_X)).toEqual({ ok: false });
   });
 
-  it('keeps the handle x.com shows for an account, for the library', async () => {
+  it('keeps the handle and picture x.com shows for an account, and nothing else', async () => {
     const { handle, handles } = setup();
-    const message = { type: 'account/seen', accountId: '9000000000000000001', handle: 'some_one' };
-    expect(await handle(message, FROM_X)).toEqual({ ok: true });
-    expect(handles).toEqual(['9000000000000000001 some_one']);
+    const id = '9000000000000000001';
+    const seen = { type: 'account/seen', accountId: id, handle: 'some_one' };
+    expect(await handle(seen, FROM_X)).toEqual({ ok: true });
+    const pictured = {
+      ...seen,
+      avatarUrl: 'https://pbs.twimg.com/profile_images/1/abc_normal.jpg',
+      extra: 'dropped',
+    };
+    expect(await handle(pictured, FROM_X)).toEqual({ ok: true });
+    expect(handles).toEqual([
+      `${id} {"handle":"some_one"}`,
+      `${id} {"handle":"some_one","avatarUrl":"https://pbs.twimg.com/profile_images/1/abc_normal.jpg"}`,
+    ]);
   });
 
   it('says so when the handle cannot be kept, without rejecting', async () => {

@@ -88,11 +88,21 @@ export interface Settings {
 }
 
 /** When the account's library was last backed up, and what else the backup reminder counts from. */
+/** How x.com shows the signed-in account (SPEC, 7.7). */
+export interface AccountProfile {
+  /** Without the @. */
+  handle: string;
+  /** Its picture on X's image server, when X's sidebar showed one. */
+  avatarUrl?: string;
+}
+
 /** What this browser holds for one X account (DESIGN, 4.7). */
 export interface StoredAccount {
   accountId: AccountId;
   /** The @handle last seen on x.com for it, without the @, if it has been seen. */
   handle?: string;
+  /** Its picture, last seen with the handle. */
+  avatarUrl?: string;
   posts: number;
   tags: number;
   /** Tags on posts. */

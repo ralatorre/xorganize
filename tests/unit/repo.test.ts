@@ -10,7 +10,7 @@ import {
   readSettings,
   readXTheme,
   recentKey,
-  recordHandle,
+  recordProfile,
   recordXTheme,
   saveCapture,
   sortKey,
@@ -556,21 +556,47 @@ describe('the accounts in this browser', () => {
     expect(await storedAccounts(db)).toEqual([]);
   });
 
-  it('gives the handle last seen on x.com, written only when it changed', async () => {
+  it('gives the handle and picture last seen on x.com, written only when they changed', async () => {
     await saveCapture(db, batch({ source: 'like', items: [{ post: post('1') }] }));
-    await recordHandle(db, ACCOUNT, 'first_name');
-    await recordHandle(db, ACCOUNT, 'second_name');
+    await recordProfile(db, ACCOUNT, { handle: 'first_name' });
+    await recordProfile(db, ACCOUNT, {
+      handle: 'second_name',
+      avatarUrl: 'https://pbs.twimg.com/profile_images/1/abc_normal.jpg',
+    });
     const put = vi.spyOn(db.meta, 'put');
-    await recordHandle(db, ACCOUNT, 'second_name');
-
+    await recordProfile(db, ACCOUNT, {
+      handle: 'second_name',
+      avatarUrl: 'https://pbs.twimg.com/profile_images/1/abc_normal.jpg',
+    });
     expect(put).not.toHaveBeenCalled();
-    expect((await storedAccounts(db))[0]?.handle).toBe('second_name');
+    expect((await storedAccounts(db))[0]).toMatchObject({
+      handle: 'second_name',
+      avatarUrl: 'https://pbs.twimg.com/profile_images/1/abc_normal.jpg',
+    });
+
+    // A picture that is no longer shown is forgotten.
+    await recordProfile(db, ACCOUNT, { handle: 'second_name' });
+    expect(put).toHaveBeenCalledTimes(1);
+    expect((await storedAccounts(db))[0]).not.toHaveProperty('avatarUrl');
   });
 
-  it('leaves out a stored handle that is not a handle', async () => {
+  it.each([
+    ['a handle that is not one', { handle: 'not a handle' }, {}],
+    ['a value that is not a profile', 'some_one', {}],
+    [
+      'a picture from elsewhere',
+      { handle: 'some_one', avatarUrl: 'https://example.com/a.jpg' },
+      { handle: 'some_one' },
+    ],
+  ])('leaves out %s', async (_, value, kept) => {
     await saveCapture(db, batch({ source: 'like', items: [{ post: post('1') }] }));
-    await db.meta.put({ accountId: ACCOUNT, key: 'handle', value: 'not a handle' });
-    expect((await storedAccounts(db))[0]).not.toHaveProperty('handle');
+    await db.meta.put({ accountId: ACCOUNT, key: 'profile', value });
+    const [account] = await storedAccounts(db);
+    expect({ handle: account?.handle, avatarUrl: account?.avatarUrl }).toEqual({
+      handle: undefined,
+      avatarUrl: undefined,
+      ...kept,
+    });
   });
 
   it('can show another account’s library, but only one that holds something', async () => {

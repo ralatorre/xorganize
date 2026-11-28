@@ -9,6 +9,8 @@ export function MenuItem(props: {
   onSelect(): void;
   checked?: boolean;
   detail?: string;
+  /** Shown before the text, such as a picture. */
+  before?: ComponentChildren;
   children: ComponentChildren;
 }) {
   const choice = props.checked !== undefined;
@@ -21,6 +23,7 @@ export function MenuItem(props: {
       tabIndex={-1}
       onClick={props.onSelect}
     >
+      {props.before}
       <span class="dropdown__text">
         <span class="dropdown__title">{props.children}</span>
         {props.detail ? <span class="dropdown__detail">{props.detail}</span> : null}

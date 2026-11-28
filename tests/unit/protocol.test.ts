@@ -46,9 +46,15 @@ describe('runtime messages', () => {
     },
   );
 
-  it('accepts the account’s handle seen on x.com', () => {
+  it('accepts the account’s handle seen on x.com, with or without its picture', () => {
     const message = { type: 'account/seen', accountId: '9000000000000000001', handle: 'some_one' };
     expect(isRuntimeMessage(message)).toBe(true);
+    expect(
+      isRuntimeMessage({
+        ...message,
+        avatarUrl: 'https://pbs.twimg.com/profile_images/1/abc_normal.jpg',
+      }),
+    ).toBe(true);
   });
 
   it.each([
@@ -57,6 +63,14 @@ describe('runtime messages', () => {
     ['a handle with a slash', { accountId: '9000000000000000001', handle: 'some/one' }],
     ['a handle too long', { accountId: '9000000000000000001', handle: 'a'.repeat(21) }],
     ['no handle', { accountId: '9000000000000000001' }],
+    [
+      'a picture from elsewhere',
+      {
+        accountId: '9000000000000000001',
+        handle: 'some_one',
+        avatarUrl: 'https://example.com/a.jpg',
+      },
+    ],
   ])('rejects %s', (_, fields) => {
     expect(isRuntimeMessage({ type: 'account/seen', ...fields })).toBe(false);
   });

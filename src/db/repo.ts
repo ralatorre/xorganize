@@ -6,13 +6,15 @@ import Dexie, { type Table } from 'dexie';
 import type { CapturedPost } from '@/src/capture/normalise';
 import type { SourceKind } from '@/src/capture/operations';
 import { isTheme, type Theme } from '@/src/dom/theme';
-import { isHandle } from '@/src/guards';
+import { isHandle, isRecord } from '@/src/guards';
+import { isXAvatarUrl } from '@/src/hosts';
 import type { LibraryDatabase } from './schema';
 import type {
   AccountId,
   BackupTimes,
   Counts,
   PostId,
+  AccountProfile,
   Settings,
   StoredAccount,
   StoredPost,
@@ -36,7 +38,7 @@ const SETTINGS = 'settings';
 const LAST_BACKUP = 'lastBackupAt';
 const REMINDER_DISMISSED = 'backupReminderDismissedAt';
 const X_THEME = 'xTheme';
-const HANDLE = 'handle';
+const PROFILE = 'profile';
 
 /** How often the backup reminder can be set to come back, in days. 0 turns it off. */
 export const BACKUP_REMINDER_DAYS = [7, 30, 90, 0] as const;
@@ -446,19 +448,28 @@ export function dismissBackupReminder(db: LibraryDatabase, accountId: AccountId,
   return db.meta.put({ accountId, key: REMINDER_DISMISSED, value: time });
 }
 
+/** A stored profile, if it is one: a handle, and a picture only on X's image server. */
+function profileOf(value: unknown): AccountProfile | undefined {
+  if (!isRecord(value) || !isHandle(value.handle)) return undefined;
+  return isXAvatarUrl(value.avatarUrl)
+    ? { handle: value.handle, avatarUrl: value.avatarUrl }
+    : { handle: value.handle };
+}
+
 /**
- * Keeps the @handle x.com shows for an account, for the library's header.
- * Written only when it differs, so that an open library does not re-read
- * for nothing.
+ * Keeps the @handle and picture x.com shows for an account, for the
+ * library's header. Written only when they differ, so that an open library
+ * does not re-read for nothing.
  */
-export function recordHandle(
+export function recordProfile(
   db: LibraryDatabase,
   accountId: AccountId,
-  handle: string,
+  profile: AccountProfile,
 ): Promise<void> {
   return db.transaction('rw', db.meta, async () => {
-    const row = await db.meta.get([accountId, HANDLE]);
-    if (row?.value !== handle) await db.meta.put({ accountId, key: HANDLE, value: handle });
+    const stored = profileOf((await db.meta.get([accountId, PROFILE]))?.value);
+    if (stored?.handle === profile.handle && stored.avatarUrl === profile.avatarUrl) return;
+    await db.meta.put({ accountId, key: PROFILE, value: profile });
   });
 }
 
@@ -476,7 +487,7 @@ async function accountsIn<Row>(table: Table<Row, [AccountId, string]>): Promise<
 
 /**
  * Every account this browser holds posts or tags for, with how much it holds
- * and its @handle when known, in the order of their IDs.
+ * and its @handle and picture when known, in the order of their IDs.
  */
 export function storedAccounts(db: LibraryDatabase): Promise<StoredAccount[]> {
   return db.transaction('r', db.posts, db.tags, db.postTags, db.meta, async () => {
@@ -485,7 +496,7 @@ export function storedAccounts(db: LibraryDatabase): Promise<StoredAccount[]> {
     return Promise.all(
       accounts.map(async (accountId) => {
         const range = allOf(accountId);
-        const [posts, tags, assignments, handle] = await Promise.all([
+        const [posts, tags, assignments, row] = await Promise.all([
           db.posts
             .where(':id')
             .between(...range)
@@ -498,11 +509,11 @@ export function storedAccounts(db: LibraryDatabase): Promise<StoredAccount[]> {
             .where('[accountId+postId]')
             .between(...range)
             .count(),
-          db.meta.get([accountId, HANDLE]),
+          db.meta.get([accountId, PROFILE]),
         ]);
         return {
           accountId,
-          ...(isHandle(handle?.value) ? { handle: handle.value } : {}),
+          ...profileOf(row?.value),
           posts,
           tags,
           assignments,

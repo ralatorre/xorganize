@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isTheme, themeOfColour } from '@/src/dom/theme';
 import { createChangeReport } from '@/src/inline/change-report';
-import { handleOfProfileLink } from '@/src/dom/viewer-handle';
+import { avatarOfImage, avatarSelector, handleOfProfileLink } from '@/src/dom/viewer-profile';
 import { themeFor } from '@/src/library/theme';
 
 describe('themeFor', () => {
@@ -81,5 +81,20 @@ describe('handleOfProfileLink', () => {
     `/${'a'.repeat(21)}`,
   ])('gives nothing for %j', (href) => {
     expect(handleOfProfileLink(href)).toBeUndefined();
+  });
+});
+
+describe('the account’s picture', () => {
+  it('is looked for in the avatar of the same handle', () => {
+    expect(avatarSelector('some_one')).toBe('[data-testid="UserAvatar-Container-some_one"] img');
+  });
+
+  it('is taken only from X’s image server', () => {
+    expect(avatarOfImage('https://pbs.twimg.com/profile_images/1/abc_normal.jpg')).toBe(
+      'https://pbs.twimg.com/profile_images/1/abc_normal.jpg',
+    );
+    expect(avatarOfImage('https://example.com/a.jpg')).toBeUndefined();
+    expect(avatarOfImage(null)).toBeUndefined();
+    expect(avatarOfImage(undefined)).toBeUndefined();
   });
 });

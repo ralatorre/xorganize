@@ -218,12 +218,19 @@ button.account[aria-expanded='true'] {
 
 .account__avatar {
   display: grid;
+  flex: none;
   place-items: center;
   width: 28px;
   height: 28px;
   border-radius: 50%;
   background: var(--chip);
   color: var(--text-2);
+  object-fit: cover;
+}
+
+.dropdown__item .account__avatar {
+  width: 24px;
+  height: 24px;
 }
 
 .account__name {
@@ -308,7 +315,7 @@ button.account[aria-expanded='true'] {
   outline-offset: -2px;
 }
 
-.dropdown__item .icon {
+.dropdown__item > .icon {
   margin-left: auto;
   color: var(--accent-ink);
 }
