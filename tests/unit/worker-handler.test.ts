@@ -38,7 +38,9 @@ const clear: CaptureClearMessage = {
 
 const RUST: TagSummary = { id: 'tag-1', name: 'rust', color: 0 };
 
-function setup(outcome: 'stored' | 'failed' = 'stored') {
+/** `prompt`: what the settings say about offering tags; 'broken' when they cannot be read. */
+function setup(outcome: 'stored' | 'failed' = 'stored', prompt: boolean | 'broken' = true) {
+  const asked: string[] = [];
   const saved: CapturePostsMessage[] = [];
   const cleared: CaptureClearMessage[] = [];
   const changes: TagChange[] = [];
@@ -52,6 +54,10 @@ function setup(outcome: 'stored' | 'failed' = 'stored') {
     store: {
       save: (message) => (saved.push(message), result(COUNTS)),
       clear: (message) => (cleared.push(message), result(COUNTS)),
+    },
+    prompts: (source) => {
+      asked.push(source);
+      return prompt === 'broken' ? Promise.reject(new Error('closed')) : Promise.resolve(prompt);
     },
     tags: {
       forPosts: (_, postIds) =>
@@ -67,7 +73,7 @@ function setup(outcome: 'stored' | 'failed' = 'stored') {
     ),
     notify: (message) => void notified.push(message),
   });
-  return { handle, saved, cleared, changes, notified, themes, handles };
+  return { handle, saved, cleared, changes, notified, themes, handles, asked };
 }
 
 describe('createWorkerHandler', () => {
@@ -81,6 +87,30 @@ describe('createWorkerHandler', () => {
     const { handle, cleared } = setup();
     expect(await handle(clear, FROM_X)).toEqual({ ok: true, counts: COUNTS });
     expect(cleared).toEqual([clear]);
+  });
+
+  it('says whether to offer tags only for a post just added on X', async () => {
+    const added: CapturePostsMessage = { ...posts, source: 'like', added: true };
+    const { handle, asked } = setup();
+    expect(await handle(added, FROM_X)).toEqual({ ok: true, counts: COUNTS, prompt: true });
+    expect(asked).toEqual(['like']);
+    // A page of a timeline, or a removal, never asks.
+    await handle(posts, FROM_X);
+    await handle(clear, FROM_X);
+    expect(asked).toEqual(['like']);
+
+    expect(await setup('stored', false).handle(added, FROM_X)).toEqual({
+      ok: true,
+      counts: COUNTS,
+    });
+    // Settings that cannot be read leave the post stored, with no prompt.
+    expect(await setup('stored', 'broken').handle(added, FROM_X)).toEqual({
+      ok: true,
+      counts: COUNTS,
+    });
+    const failed = setup('failed');
+    expect(await failed.handle(added, FROM_X)).toEqual({ ok: false });
+    expect(failed.asked).toEqual([]);
   });
 
   it('says so when storing fails, without rejecting', async () => {

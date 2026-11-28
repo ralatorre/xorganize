@@ -25,6 +25,7 @@ function setup(
   const sent: CaptureMessage[] = [];
   const captured: Array<[string, { bookmarks: number; likes: number }]> = [];
   const failures: string[] = [];
+  const prompted: string[] = [];
   const viewerId = 'viewerId' in options ? options.viewerId : VIEWER;
   const reply =
     'reply' in options ? options.reply : { ok: true, counts: { bookmarks: 3, likes: 1 } };
@@ -36,9 +37,10 @@ function setup(
     },
     onCaptured: (source, counts) => captured.push([source, counts]),
     onFailed: () => failures.push('failed'),
+    onPrompt: (postId) => prompted.push(postId),
     postFromPage: (id) => options.onPage?.find((post) => post.id === id),
   });
-  return { capture, sent, captured, failures };
+  return { capture, sent, captured, failures, prompted };
 }
 
 function response(
@@ -213,7 +215,41 @@ describe('changes the user makes', () => {
     expect(message.items).toHaveLength(1);
     expect(message.items[0]?.post.text).toBe('Seen on the home timeline');
     expect(message.items[0]?.sortIndex).toBeUndefined();
+    expect(message.added).toBe(true);
+    expect(isRuntimeMessage(message)).toBe(true);
     expect(captured).toHaveLength(1);
+  });
+
+  it('offers tags for a post just added, once stored, when the worker says to', async () => {
+    const counts = { bookmarks: 3, likes: 1 };
+    const seen = rawPost({ id: '401' });
+    const home = response('HomeTimeline', homeTimeline([postEntry(seen, '1')]));
+
+    const asked = setup({ reply: { ok: true, counts, prompt: true } });
+    await asked.capture(home);
+    await asked.capture(mutation('FavoriteTweet', '401'));
+    expect(asked.prompted).toEqual(['401']);
+
+    const quiet = setup({ reply: { ok: true, counts } });
+    await quiet.capture(home);
+    await quiet.capture(mutation('CreateBookmark', '401'));
+    expect(quiet.prompted).toEqual([]);
+
+    const failed = setup({ reply: { ok: false } });
+    await failed.capture(home);
+    await failed.capture(mutation('CreateBookmark', '401'));
+    expect(failed.prompted).toEqual([]);
+  });
+
+  it('offers no tags for a page of a timeline, or for a removal', async () => {
+    const { capture, sent, prompted } = setup({
+      reply: { ok: true, counts: { bookmarks: 3, likes: 1 }, prompt: true },
+    });
+    await capture(response('Bookmarks', bookmarksPage));
+    await capture(mutation('DeleteBookmark', '102'));
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).not.toHaveProperty('added');
+    expect(prompted).toEqual([]);
   });
 
   it('leaves out the possibly stale bookmark and like state of a remembered post', async () => {

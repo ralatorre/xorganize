@@ -51,7 +51,19 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   remoteImages: true,
   backupReminderDays: 30,
   theme: 'x',
+  promptAfterBookmark: true,
+  promptAfterLike: false,
 };
+
+/** Whether to offer tags for a post just added to a source on X (DESIGN, 4.3). */
+export function prompts(settings: Settings, source: SourceKind): boolean {
+  return source === 'bookmark' ? settings.promptAfterBookmark : settings.promptAfterLike;
+}
+
+/** The settings change that turns the prompt after a bookmark or a like on or off. */
+export function promptChange(source: SourceKind, enabled: boolean): Partial<Settings> {
+  return source === 'bookmark' ? { promptAfterBookmark: enabled } : { promptAfterLike: enabled };
+}
 
 const SORT_WIDTH = 30;
 
@@ -455,17 +467,20 @@ export async function activeAccount(db: LibraryDatabase): Promise<AccountId | un
 export async function readSettings(db: LibraryDatabase): Promise<Settings> {
   const row = await db.meta.get(['', SETTINGS]);
   const stored = typeof row?.value === 'object' && row.value !== null ? row.value : {};
-  const { remoteImages, backupReminderDays, theme } = stored as Partial<
-    Record<keyof Settings, unknown>
-  >;
+  const { remoteImages, backupReminderDays, theme, promptAfterBookmark, promptAfterLike } =
+    stored as Partial<Record<keyof Settings, unknown>>;
+  const flag = (value: unknown, fallback: boolean) =>
+    typeof value === 'boolean' ? value : fallback;
   return {
-    remoteImages: typeof remoteImages === 'boolean' ? remoteImages : DEFAULT_SETTINGS.remoteImages,
+    remoteImages: flag(remoteImages, DEFAULT_SETTINGS.remoteImages),
     backupReminderDays: (BACKUP_REMINDER_DAYS as readonly unknown[]).includes(backupReminderDays)
       ? (backupReminderDays as number)
       : DEFAULT_SETTINGS.backupReminderDays,
     theme: (THEME_SETTINGS as readonly unknown[]).includes(theme)
       ? (theme as ThemeSetting)
       : DEFAULT_SETTINGS.theme,
+    promptAfterBookmark: flag(promptAfterBookmark, DEFAULT_SETTINGS.promptAfterBookmark),
+    promptAfterLike: flag(promptAfterLike, DEFAULT_SETTINGS.promptAfterLike),
   };
 }
 

@@ -135,6 +135,7 @@ describe('capture messages', () => {
   it('accepts well-formed messages', () => {
     expect(isRuntimeMessage(posts)).toBe(true);
     expect(isRuntimeMessage(clear)).toBe(true);
+    expect(isRuntimeMessage({ ...posts, items: [{ post }], added: true })).toBe(true);
   });
 
   it.each([
@@ -147,6 +148,8 @@ describe('capture messages', () => {
     ['a non-numeric sort index', { items: [{ post, sortIndex: 'first' }] }],
     ['a malformed referenced post', { referenced: [{ ...post, id: 'abc' }] }],
     ['a non-numeric unavailable id', { unavailable: ['../../etc'] }],
+    ['an added mark that is not true', { items: [{ post }], added: 'yes' }],
+    ['more than one item marked as just added', { added: true }],
   ])('rejects posts with %s', (_label, change) => {
     expect(isRuntimeMessage({ ...posts, ...change })).toBe(false);
   });

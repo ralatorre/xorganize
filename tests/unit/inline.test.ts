@@ -5,6 +5,7 @@ import { themeOfColour } from '@/src/dom/theme';
 import { GUARDED_EVENTS, contain, createKeyboardGuard } from '@/src/inline/keyboard-guard';
 import { keyAction, moveHighlight, recentOf, rowsOf } from '@/src/inline/popover-model';
 import { placePopover } from '@/src/inline/position';
+import { createDismissTimer, firstInView, inView, PROMPT_MS } from '@/src/inline/prompt';
 import { TAG_SHORTCUT, isShortcutPress, matchesShortcut, postAnchor } from '@/src/inline/shortcut';
 import { createTagState } from '@/src/inline/tag-state';
 import { PENDING_COLOUR, createTagger, preview } from '@/src/inline/tagger';
@@ -502,5 +503,85 @@ describe('postAnchor', () => {
     expect(anchor.host).toBe(host);
     expect(anchor.button).toBe(post);
     expect(shown).toEqual([true]);
+  });
+});
+
+describe('the tag prompt', () => {
+  const box = (top: number, left = 0) => ({ top, left, bottom: top + 20, right: left + 20 });
+
+  it('opens from the first of a post’s buttons wholly on screen', () => {
+    expect(inView(box(0), 100, 100)).toBe(true);
+    expect(inView(box(-1), 100, 100)).toBe(false);
+    expect(inView(box(90), 100, 100)).toBe(false);
+    expect(inView(box(0, 90), 100, 100)).toBe(false);
+    const boxes = new Map([
+      ['gone', undefined],
+      ['above', box(-50)],
+      ['shown', box(40)],
+      ['also shown', box(60)],
+    ]);
+    const pick = (items: string[]) => firstInView(items, (item) => boxes.get(item), 100, 100);
+    expect(pick(['gone', 'above', 'shown', 'also shown'])).toBe('shown');
+    expect(pick(['gone', 'above'])).toBeUndefined();
+  });
+
+  function timer() {
+    const pending = new Map<number, { task: () => void; ms: number }>();
+    let next = 0;
+    let expired = 0;
+    const control = createDismissTimer({
+      schedule: (task, ms) => {
+        const id = next++;
+        pending.set(id, { task, ms });
+        return () => pending.delete(id);
+      },
+      onExpire: () => expired++,
+    });
+    const fire = () => {
+      for (const [id, { task }] of [...pending]) {
+        pending.delete(id);
+        task();
+      }
+    };
+    return { control, pending, fire, expired: () => expired };
+  }
+
+  it('goes after five seconds, unless something holds it', () => {
+    const { control, pending, fire, expired } = timer();
+    control.start();
+    expect([...pending.values()].map(({ ms }) => ms)).toEqual([PROMPT_MS]);
+    fire();
+    expect(expired()).toBe(1);
+    expect(pending.size).toBe(0);
+  });
+
+  it('waits while the pointer is over it or focus is in it, then counts again in full', () => {
+    const { control, pending, fire, expired } = timer();
+    control.start();
+    control.hold('pointer');
+    control.hold('focus');
+    expect(pending.size).toBe(0);
+    control.release('pointer');
+    expect(pending.size).toBe(0);
+    control.release('focus');
+    expect([...pending.values()].map(({ ms }) => ms)).toEqual([PROMPT_MS]);
+    // Releasing what was not held changes nothing.
+    control.release('pointer');
+    expect(pending.size).toBe(1);
+    fire();
+    expect(expired()).toBe(1);
+  });
+
+  it('starts afresh when shown again, and stays gone once stopped', () => {
+    const { control, pending, expired } = timer();
+    control.start();
+    control.hold('pointer');
+    control.start();
+    expect(pending.size).toBe(1);
+    control.stop();
+    expect(pending.size).toBe(0);
+    control.release('pointer');
+    expect(pending.size).toBe(0);
+    expect(expired()).toBe(0);
   });
 });

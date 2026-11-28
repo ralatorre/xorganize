@@ -111,6 +111,11 @@ export interface CapturePostsMessage {
   referenced: CapturedPost[];
   /** Ids of posts X reports as no longer available. */
   unavailable: string[];
+  /**
+   * The user has just bookmarked or liked the one item on X. The reply then
+   * says whether to offer to tag it (DESIGN, 4.3).
+   */
+  added?: true;
 }
 
 /** The user removed a bookmark or a like. */
@@ -139,7 +144,8 @@ export interface AccountSeenMessage extends AccountProfile {
 }
 
 /** The worker's answer to a capture message: the account's totals afterwards. */
-export type CaptureReply = { ok: true; counts: Counts } | { ok: false };
+/** `prompt`: for a post just added on X, the settings ask to offer tags for it. */
+export type CaptureReply = { ok: true; counts: Counts; prompt?: true } | { ok: false };
 
 /** The tags on posts that are on screen. */
 export interface TagsForPostsMessage {
@@ -274,7 +280,8 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
       referenced.every(isCapturedPost) &&
       Array.isArray(unavailable) &&
       unavailable.length <= MAX_ITEMS &&
-      unavailable.every(isId)
+      unavailable.every(isId) &&
+      (value.added === undefined || (value.added === true && items.length === 1))
     );
   }
   if (

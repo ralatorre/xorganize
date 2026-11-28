@@ -34,12 +34,26 @@ export default defineContentScript({
 
     const banner = createBanner();
     const seen = new SeenPosts();
+    const inline = startInlineTagging({
+      send,
+      connect: () => browser.runtime.connect({ name: TAGS_PORT }),
+      accountId: viewerId,
+      postFor: (postId) => {
+        const remembered = seen.get(postId);
+        if (remembered) return { post: remembered, partial: false };
+        const fromPage = postFromPage(postId);
+        return fromPage ? { post: fromPage, partial: true } : undefined;
+      },
+      onFailed: () => banner.say('could not save tags. Try again.'),
+    });
+
     const capture = createCapture({
       seen,
       viewerId,
       send: (message) => send<CaptureReply>(message),
       onCaptured: (source, counts) => banner.show(source, counts),
       onFailed: () => banner.fail(),
+      onPrompt: (postId) => inline.prompt(postId),
       postFromPage: (id) => postFromPage(id),
     });
 
@@ -67,18 +81,5 @@ export default defineContentScript({
     });
 
     connectBridge('extension', handle);
-
-    startInlineTagging({
-      send,
-      connect: () => browser.runtime.connect({ name: TAGS_PORT }),
-      accountId: viewerId,
-      postFor: (postId) => {
-        const remembered = seen.get(postId);
-        if (remembered) return { post: remembered, partial: false };
-        const fromPage = postFromPage(postId);
-        return fromPage ? { post: fromPage, partial: true } : undefined;
-      },
-      onFailed: () => banner.say('could not save tags. Try again.'),
-    });
   },
 });
