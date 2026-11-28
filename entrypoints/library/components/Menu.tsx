@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
-import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { menuIndex } from '@/src/library/menu';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { placePopover } from '@/src/inline/position';
+import { MENU_GAP, menuIndex } from '@/src/library/menu';
 
 const ITEMS = '[role="menuitem"], [role="menuitemradio"]';
 
@@ -9,6 +10,9 @@ const ITEMS = '[role="menuitem"], [role="menuitemradio"]';
  * button; Esc, a click outside or choosing an item closes it, and focus goes
  * back to the button. The arrows, Home and End move between items, and keys
  * pressed in the menu do not reach the library's shortcuts.
+ *
+ * It keeps whether it is open, unless `open` and `onOpenChange` are given, as
+ * when a right click elsewhere opens it.
  */
 export function Menu(props: {
   /** The menu's accessible name, and the button's tooltip. */
@@ -20,10 +24,23 @@ export function Menu(props: {
   button: ComponentChildren;
   /** Which edge of the button the menu lines up with. */
   align?: 'start' | 'end';
+  /** Focus the first item on opening, even when another is checked. */
+  focusFirst?: boolean;
+  /**
+   * Placed over the page at the button, below it or above when there is no
+   * room, instead of inside its container. For a menu inside an area that
+   * scrolls, such as the sidebar, which would cut it off. Scrolling closes it.
+   */
+  floating?: boolean;
+  open?: boolean;
+  onOpenChange?(open: boolean): void;
   /** Menu items: buttons with a menuitem role, and anything that labels them. */
   children: ComponentChildren;
 }) {
-  const [open, setOpen] = useState(false);
+  const [own, setOwn] = useState(false);
+  const open = props.open ?? own;
+  const setOpen = props.onOpenChange ?? setOwn;
+  const { floating } = props;
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const items = () => [...(list.current?.querySelectorAll<HTMLElement>(ITEMS) ?? [])];
@@ -36,9 +53,27 @@ export function Menu(props: {
   // On opening, the checked item has focus, or else the first.
   useLayoutEffect(() => {
     if (!open) return;
+    if (floating && list.current && button.current)
+      place(list.current, button.current, props.align ?? 'end');
     const all = items();
-    (all.find((item) => item.getAttribute('aria-checked') === 'true') ?? all[0])?.focus();
+    const checked = props.focusFirst
+      ? undefined
+      : all.find((item) => item.getAttribute('aria-checked') === 'true');
+    // Moving focus must not scroll, which would close a floating menu.
+    (checked ?? all[0])?.focus({ preventScroll: floating === true });
   }, [open]);
+
+  // A floating menu stays where it was placed, so it closes once the button moves.
+  useEffect(() => {
+    if (!open || !floating) return;
+    const closeOnMove = () => close(false);
+    window.addEventListener('scroll', closeOnMove, { capture: true, passive: true });
+    window.addEventListener('resize', closeOnMove);
+    return () => {
+      window.removeEventListener('scroll', closeOnMove, { capture: true });
+      window.removeEventListener('resize', closeOnMove);
+    };
+  }, [open, floating]);
 
   return (
     <div
@@ -70,7 +105,7 @@ export function Menu(props: {
           <div class="dropdown__scrim" onClick={() => close(false)} />
           <div
             ref={list}
-            class="dropdown__menu"
+            class={floating ? 'dropdown__menu dropdown__menu--floating' : 'dropdown__menu'}
             role="menu"
             aria-label={props.label}
             // Closed before the item acts, so that an item that moves focus,
@@ -99,4 +134,16 @@ export function Menu(props: {
       ) : null}
     </div>
   );
+}
+
+/** Puts a floating menu at its button, inside the window. */
+function place(menu: HTMLElement, from: HTMLElement, align: 'start' | 'end') {
+  const { top, left } = placePopover(
+    from.getBoundingClientRect(),
+    { width: menu.offsetWidth, height: menu.offsetHeight },
+    { width: window.innerWidth, height: window.innerHeight },
+    { align, gap: MENU_GAP },
+  );
+  menu.style.top = `${top}px`;
+  menu.style.left = `${left}px`;
 }

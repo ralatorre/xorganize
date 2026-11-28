@@ -4,7 +4,7 @@
  * flat; this is display only.
  */
 
-import type { TagSuggestion } from '@/src/db/types';
+import type { PostId, TagId, TagSuggestion } from '@/src/db/types';
 import { tagKey } from '@/src/tags/names';
 
 export const GROUP_SEPARATOR = '/';
@@ -67,4 +67,31 @@ const labels = new Intl.Collator('en-US', { sensitivity: 'base', numeric: true }
 function sortLevel(level: TagNode[]): void {
   level.sort((a, b) => labels.compare(a.label, b.label) || a.key.localeCompare(b.key));
   for (const node of level) sortLevel(node.children);
+}
+
+/** Every tag at or under a node, in the order the sidebar lists them. */
+export function tagsIn(node: TagNode): TagId[] {
+  return [...(node.tag ? [node.tag.id] : []), ...node.children.flatMap(tagsIn)];
+}
+
+/**
+ * How many posts each group without a tag of its own holds: the posts that
+ * carry any tag under it, each counted once. By node key.
+ */
+export function groupCounts(
+  tree: readonly TagNode[],
+  tagged: ReadonlyMap<TagId, ReadonlySet<PostId>>,
+): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  const visit = (node: TagNode) => {
+    if (node.children.length === 0) return;
+    if (!node.tag) {
+      const posts = new Set<PostId>();
+      for (const id of tagsIn(node)) for (const post of tagged.get(id) ?? []) posts.add(post);
+      counts.set(node.key, posts.size);
+    }
+    node.children.forEach(visit);
+  };
+  tree.forEach(visit);
+  return counts;
 }

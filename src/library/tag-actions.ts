@@ -1,10 +1,10 @@
 /**
  * What the library says about tag management before and after it happens
- * (DESIGN, 4.5): how many posts a deletion touches, and why a rename was
+ * (DESIGN, 4.5): how many posts a deletion touches, and why a new name was
  * refused. Worked out from the catalogue, without reading the database.
  */
 
-import type { RenameProblem } from '@/src/db/tags';
+import type { CreateProblem, RenameProblem } from '@/src/db/tags';
 import type { PostId, TagId } from '@/src/db/types';
 import { MAX_TAG_NAME } from '@/src/tags/names';
 import type { Catalogue } from './browse';
@@ -47,6 +47,13 @@ export function deletionMessage(impact: DeletionImpact): string {
   return `${off} ${only}`;
 }
 
+/** What merging a tag into another does, said before it happens. */
+export function mergeMessage(tag: { name: string; count: number }): string {
+  if (tag.count === 0) return `No post carries “${tag.name}”, so it is only removed.`;
+  const posts = tag.count === 1 ? 'Its post moves' : `Its ${tag.count.toLocaleString()} posts move`;
+  return `${posts} to that tag, and “${tag.name}” is removed.`;
+}
+
 const RENAME_PROBLEMS: Record<RenameProblem, string> = {
   empty: 'Type a name.',
   'too-long': `Use at most ${MAX_TAG_NAME} characters.`,
@@ -58,4 +65,9 @@ const RENAME_PROBLEMS: Record<RenameProblem, string> = {
 
 export function renameProblem(problem: RenameProblem): string {
   return RENAME_PROBLEMS[problem];
+}
+
+/** Why a new tag was refused. Only a name in use differs from renaming. */
+export function createProblem(problem: CreateProblem): string {
+  return problem === 'taken' ? 'A tag with that name already exists.' : RENAME_PROBLEMS[problem];
 }

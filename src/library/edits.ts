@@ -9,6 +9,7 @@
 import { deleteAllData, removePost, restorePost, type RemovedPost } from '@/src/db/repo';
 import type { LibraryDatabase } from '@/src/db/schema';
 import {
+  createTag,
   deleteTag,
   mergeTags,
   recentTags,
@@ -17,6 +18,7 @@ import {
   setPostTags,
   suggestTags,
   tagsForPosts,
+  type CreateResult,
   type RenameResult,
   type TagDeletion,
 } from '@/src/db/tags';
@@ -34,6 +36,8 @@ export interface LibraryEdits {
     postId: PostId,
     change: { add: string[]; remove: TagId[] },
   ): Promise<TagSummary[]>;
+  /** A tag on no post yet, from the sidebar's "+". */
+  createTag(accountId: AccountId, name: string): Promise<CreateResult>;
   rename(accountId: AccountId, tagId: TagId, name: string): Promise<RenameResult>;
   recolour(accountId: AccountId, tagId: TagId, colour: number): Promise<boolean>;
   merge(accountId: AccountId, fromId: TagId, intoId: TagId): Promise<boolean>;
@@ -69,6 +73,8 @@ export function createLibraryEdits(
     }),
     setTags: (accountId, postId, change) =>
       announced(accountId, setPostTags(db, { accountId, postId, ...change })),
+    createTag: (accountId, name) =>
+      announced(accountId, createTag(db, accountId, name), (result) => result.ok),
     rename: (accountId, tagId, name) =>
       announced(accountId, renameTag(db, accountId, tagId, name), (result) => result.ok),
     recolour: (accountId, tagId, colour) =>

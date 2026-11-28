@@ -39,6 +39,8 @@ export type ViewChange =
   | { type: 'source'; source: SourceFilter }
   /** A tag clicked in the sidebar. `add` is Ctrl or Cmd held: add to the selection. */
   | { type: 'tag'; tagId: TagId; add: boolean }
+  /** A group clicked in the sidebar: every tag in it, matching any. */
+  | { type: 'group'; tagIds: readonly TagId[] }
   | { type: 'untag'; tagId: TagId }
   | { type: 'match'; match: TagMatch }
   | { type: 'query'; query: string }
@@ -52,6 +54,10 @@ export function changeView(view: View, change: ViewChange): View {
       return { ...view, source: change.source };
     case 'tag':
       return { ...view, tags: pickTag(view.tags, change.tagId, change.add) };
+    case 'group':
+      return groupChosen(view, change.tagIds)
+        ? { ...view, tags: [] }
+        : { ...view, tags: [...change.tagIds], match: 'any' };
     case 'untag':
       return { ...view, tags: view.tags.filter((id) => id !== change.tagId) };
     case 'match':
@@ -77,6 +83,17 @@ export function changeView(view: View, change: ViewChange): View {
 function pickTag(tags: readonly TagId[], tagId: TagId, add: boolean): readonly TagId[] {
   if (add) return tags.includes(tagId) ? tags.filter((id) => id !== tagId) : [...tags, tagId];
   return tags.length === 1 && tags[0] === tagId ? [] : [tagId];
+}
+
+/**
+ * True while the view shows a group: exactly its tags, matching any. Clicking
+ * the group again then clears them, as for a tag.
+ */
+export function groupChosen(view: View, tagIds: readonly TagId[]): boolean {
+  if (tagIds.length === 0 || view.tags.length !== tagIds.length) return false;
+  if (tagIds.length > 1 && view.match !== 'any') return false;
+  const chosen = new Set(view.tags);
+  return tagIds.every((id) => chosen.has(id));
 }
 
 /** True when the view hides some posts. */

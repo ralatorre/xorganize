@@ -5,6 +5,7 @@ import { activeAccount, clearSource, removePost, restorePost, saveCapture } from
 import { LibraryDatabase } from '@/src/db/schema';
 import {
   UnknownPostError,
+  createTag,
   deleteTag,
   mergeTags,
   recentTags,
@@ -205,6 +206,34 @@ describe('suggestTags and recentTags', () => {
   it('suggests nothing from another account', async () => {
     expect(await suggestTags(db, OTHER, 'ty', 10)).toEqual([]);
     expect(await recentTags(db, OTHER)).toEqual([]);
+  });
+});
+
+describe('createTag', () => {
+  const create = (name: string) =>
+    createTag(db, ACCOUNT, name, { now: (clock += 10), newId: () => `tag-${++ids}` });
+
+  it('creates a tag on no post, with the colour fewest tags have', async () => {
+    await change({ postId: '1', add: ['rust'], post: post('1') });
+    expect(await create(' to  read ')).toEqual({
+      ok: true,
+      tag: { id: 'tag-2', name: 'to read', color: 1 },
+    });
+    expect(await suggestTags(db, ACCOUNT, 'to', 5)).toEqual([
+      { id: 'tag-2', name: 'to read', color: 1, count: 0 },
+    ]);
+  });
+
+  it('refuses a name in use, ignoring case, and a name that is not valid', async () => {
+    await create('Rust');
+    expect(await create('rust')).toEqual({ ok: false, problem: 'taken' });
+    expect(await create('a;b')).toEqual({ ok: false, problem: 'semicolon' });
+    expect(await db.tags.count()).toBe(1);
+  });
+
+  it('keeps accounts apart', async () => {
+    await create('rust');
+    expect(await createTag(db, OTHER, 'rust')).toMatchObject({ ok: true });
   });
 });
 

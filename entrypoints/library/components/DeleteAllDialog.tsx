@@ -15,7 +15,7 @@ export function DeleteAllDialog(props: { onDelete(): void; onCancel(): void }) {
           if (confirmed) props.onDelete();
         }}
       >
-        <label class="manage__label modal__field">
+        <label class="modal__label modal__field">
           Type “{DELETE_WORD}” to confirm
           <input
             type="text"

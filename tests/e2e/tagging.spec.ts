@@ -431,11 +431,14 @@ test('tags are renamed, recoloured, merged and deleted in the library, and x.com
   await library.goto(`chrome-extension://${extensionId}/library.html`);
   await expect(sidebarTag(library, 'Rust')).toContainText('2');
 
-  // Rename, from the tag's ⋯ button. Open tabs on x.com show the new name.
+  // Rename, from the tag's ⋯ menu. Open tabs on x.com show the new name.
+  const menuOf = (name: string) => library.getByRole('menu', { name: `Manage ${name}` });
   await library.getByRole('button', { name: 'Manage Rust' }).click();
-  await library.getByRole('button', { name: 'Rename' }).click();
-  await library.getByRole('textbox', { name: 'New name' }).fill('Rust lang');
-  await library.getByRole('button', { name: 'Save', exact: true }).click();
+  await menuOf('Rust').getByRole('menuitem', { name: 'Rename…' }).click();
+  const rename = library.getByRole('dialog', { name: 'Rename “Rust”' });
+  await rename.getByRole('textbox', { name: 'Name' }).fill('Rust lang');
+  await rename.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(rename).toHaveCount(0);
   await expect(sidebarTag(library, 'Rust lang')).toContainText('2');
   await expect
     .poll(() => tagButtons(site))
@@ -443,38 +446,49 @@ test('tags are renamed, recoloured, merged and deleted in the library, and x.com
 
   // A name another tag has is refused, and Esc leaves it as it was.
   await library.getByRole('button', { name: 'Manage to read' }).click();
-  await library.getByRole('button', { name: 'Rename' }).click();
-  await library.getByRole('textbox', { name: 'New name' }).fill('rust LANG');
-  await library.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(library.getByRole('alert')).toHaveText(
+  await menuOf('to read').getByRole('menuitem', { name: 'Rename…' }).click();
+  const refused = library.getByRole('dialog', { name: 'Rename “to read”' });
+  await refused.getByRole('textbox', { name: 'Name' }).fill('rust LANG');
+  await refused.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(refused.getByRole('alert')).toHaveText(
     'Another tag has that name. Merge into it instead.',
   );
   await library.keyboard.press('Escape');
-  await expect(library.getByRole('group', { name: 'Manage to read' })).toHaveCount(0);
+  await expect(refused).toHaveCount(0);
+  await expect(sidebarTag(library, 'to read')).toBeVisible();
   await expect(library.getByRole('button', { name: 'Manage to read' })).toBeFocused();
 
-  // Another colour from the palette.
+  // Another colour from the palette in the menu, which closes it.
   await library.getByRole('button', { name: 'Manage to read' }).click();
-  await library.getByRole('button', { name: 'Change colour' }).click();
-  await library.getByRole('radio', { name: 'Pink' }).check();
+  await menuOf('to read').getByRole('menuitemradio', { name: 'Pink' }).click();
+  await expect(menuOf('to read')).toHaveCount(0);
   await expect(sidebarTag(library, 'to read').locator('.tag-dot')).toHaveCSS(
     'background-color',
     'rgb(249, 24, 128)',
   );
-  await library.getByRole('button', { name: 'Done' }).click();
+  await library.getByRole('button', { name: 'Manage to read' }).click();
+  await expect(menuOf('to read').getByRole('menuitemradio', { name: 'Pink' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await library.keyboard.press('Escape');
 
   // Merge: the posts move, and the tag goes.
   await library.getByRole('button', { name: 'Manage to read' }).click();
-  await library.getByRole('button', { name: 'Merge into…' }).click();
-  await library.getByRole('combobox', { name: 'Merge into' }).selectOption({ label: 'Rust lang' });
-  await library.getByRole('button', { name: 'Merge', exact: true }).click();
+  await menuOf('to read').getByRole('menuitem', { name: 'Merge into…' }).click();
+  const merge = library.getByRole('dialog', { name: 'Merge “to read” into another tag' });
+  await merge.getByRole('combobox', { name: 'Merge into' }).selectOption({ label: 'Rust lang' });
+  await merge.getByRole('button', { name: 'Merge', exact: true }).click();
   await expect(sidebarTag(library, 'to read')).toHaveCount(0);
   await expect(sidebarTag(library, 'Rust lang')).toContainText('2');
   await expect.poll(() => tagButtons(site)).toEqual(['Tags: Rust lang', 'Tags: Rust lang']);
 
   // Delete, from a right click: it asks first, and says what will happen.
+  // With one tag left, there is nothing to merge into.
   await sidebarTag(library, 'Rust lang').click({ button: 'right' });
-  await library.getByRole('button', { name: 'Delete…' }).click();
+  await expect(menuOf('Rust lang').getByRole('menuitem', { name: 'Rename…' })).toBeFocused();
+  await expect(menuOf('Rust lang').getByRole('menuitem', { name: 'Merge into…' })).toHaveCount(0);
+  await menuOf('Rust lang').getByRole('menuitem', { name: 'Delete tag…' }).click();
   const dialog = library.getByRole('dialog', { name: 'Delete the tag “Rust lang”?' });
   await expect(dialog).toContainText(
     'It will be taken off 2 posts. 2 of them are in the library only because of this tag, and will leave it.',
@@ -483,7 +497,8 @@ test('tags are renamed, recoloured, merged and deleted in the library, and x.com
   await expect(dialog).toHaveCount(0);
   await expect(sidebarTag(library, 'Rust lang')).toBeVisible();
 
-  await library.getByRole('button', { name: 'Delete…' }).click();
+  await sidebarTag(library, 'Rust lang').click({ button: 'right' });
+  await menuOf('Rust lang').getByRole('menuitem', { name: 'Delete tag…' }).click();
   await dialog.getByRole('button', { name: 'Delete tag' }).click();
   await expect(library.getByRole('heading', { name: 'Your library is empty' })).toBeVisible();
   await expect.poll(() => tagButtons(site)).toEqual(['Tag', 'Tag']);

@@ -219,6 +219,34 @@ export async function setPostTags(
   });
 }
 
+/** Why a tag could not be created. */
+export type CreateProblem = TagNameProblem | 'taken';
+
+export type CreateResult = { ok: true; tag: TagSummary } | { ok: false; problem: CreateProblem };
+
+/**
+ * Creates a tag that no post carries yet, with the next unused colour. A name
+ * another tag already has is refused, ignoring case and spacing.
+ */
+export async function createTag(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  name: string,
+  options: TagWriteOptions = {},
+): Promise<CreateResult> {
+  const parsed = parseTagName(name);
+  if (!parsed.ok) return parsed;
+  const now = options.now ?? Date.now();
+  const newId = options.newId ?? (() => crypto.randomUUID());
+  return db.transaction('rw', db.tags, async () => {
+    if (await tagNamed(db, accountId, parsed.nameKey)) {
+      return { ok: false, problem: 'taken' } as const;
+    }
+    const tag = await addTag(db, accountId, parsed, now, newId);
+    return { ok: true, tag: summaryOf(tag) } as const;
+  });
+}
+
 /** Why a tag could not be renamed. */
 export type RenameProblem = TagNameProblem | 'taken' | 'missing';
 
@@ -348,11 +376,24 @@ async function findOrCreateTag(
   now: number,
   newId: () => TagId,
 ): Promise<Tag> {
-  const found = await db.tags
-    .where('[accountId+nameKey]')
-    .equals([accountId, parsed.nameKey])
-    .first();
-  if (found) return found;
+  return (
+    (await tagNamed(db, accountId, parsed.nameKey)) ??
+    (await addTag(db, accountId, parsed, now, newId))
+  );
+}
+
+function tagNamed(db: LibraryDatabase, accountId: AccountId, nameKey: string) {
+  return db.tags.where('[accountId+nameKey]').equals([accountId, nameKey]).first();
+}
+
+/** A new tag with the colour fewest tags have. */
+async function addTag(
+  db: LibraryDatabase,
+  accountId: AccountId,
+  parsed: { name: string; nameKey: string },
+  now: number,
+  newId: () => TagId,
+): Promise<Tag> {
   const colours = await db.tags
     .where('[accountId+lastUsedAt]')
     .between([accountId, Dexie.minKey], [accountId, Dexie.maxKey])
