@@ -102,7 +102,7 @@ test('cards show why a post is here, its media in one frame, and tags that filte
   await expect(card('A video').locator('.media.media--1')).toContainText('Video');
 
   // A tag on a card shows its posts; Ctrl-click adds another.
-  const summary = library.locator('.summary__count');
+  const summary = library.locator('.toolbar__count');
   await card('A video').getByRole('button', { name: 'go' }).click();
   await expect(summary).toHaveText('1 post');
   await card('A video')

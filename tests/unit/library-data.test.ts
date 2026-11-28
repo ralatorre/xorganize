@@ -178,15 +178,18 @@ describe('createLibraryExport', () => {
   it('saves the file and records a backup', async () => {
     const saved: ExportedFile[] = [];
     const exportTo = createLibraryExport(db, (file) => saved.push(file), now);
-    expect(await exportTo(ACCOUNT, 'library', 'json')).toBe(2);
+    expect(await exportTo(ACCOUNT, 'library', 'json')).toEqual({
+      count: 2,
+      name: 'xorganize-export-2026-01-02.json',
+    });
     expect(saved.map((file) => file.name)).toEqual(['xorganize-export-2026-01-02.json']);
     expect((await backupTimes(db, ACCOUNT)).lastBackupAt).toBe(NOON);
   });
 
   it('records nothing for anything else', async () => {
     const exportTo = createLibraryExport(db, vi.fn(), now);
-    expect(await exportTo(ACCOUNT, 'library', 'csv')).toBe(2);
-    expect(await exportTo(ACCOUNT, { postIds: ['1'] }, 'json')).toBe(1);
+    expect((await exportTo(ACCOUNT, 'library', 'csv'))?.count).toBe(2);
+    expect((await exportTo(ACCOUNT, { postIds: ['1'] }, 'json'))?.count).toBe(1);
     expect((await backupTimes(db, ACCOUNT)).lastBackupAt).toBeUndefined();
   });
 

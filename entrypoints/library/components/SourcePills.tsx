@@ -1,7 +1,7 @@
 import type { SourceCounts } from '@/src/library/select';
 import type { SourceFilter } from '@/src/library/view';
 import { SOURCE_FILTERS } from '@/src/library/view';
-import { SOURCE_LABELS } from './source-labels';
+import { SOURCE_LABELS } from '@/src/library/toolbar';
 
 /** The sources as a row of pills, for the narrow layout (DESIGN, 4.5). */
 export function SourcePills(props: {

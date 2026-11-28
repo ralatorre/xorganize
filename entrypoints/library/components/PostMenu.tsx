@@ -12,6 +12,7 @@ export function PostMenu(props: {
   return (
     <Menu
       label="More actions"
+      buttonLabel="More actions"
       buttonClass="icon-button icon-button--small"
       button={<Icon name="more" size="small" />}
     >

@@ -2,7 +2,8 @@ import type { SourceCounts } from '@/src/library/select';
 import type { SourceFilter } from '@/src/library/view';
 import { SOURCE_FILTERS } from '@/src/library/view';
 import { Icon } from './Icon';
-import { SOURCE_ICONS, SOURCE_LABELS } from './source-labels';
+import { SOURCE_LABELS } from '@/src/library/toolbar';
+import { SOURCE_ICONS } from './source-icons';
 
 /** The sources, each with its icon and how many posts it holds. Exactly one is selected. */
 export function SourceList(props: {

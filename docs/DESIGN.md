@@ -137,7 +137,7 @@ The library is one application shown in two containers:
 - **Full tab** (`library.html`), opened from the toolbar popup or a shortcut. The primary view.
 - **Side panel**, a narrow single-column version docked beside x.com. Chromium only.
 
-> **As first built:** the library predates the look described here and in section 7. The controls above the list are a loose row of text, selects and buttons, a tag's panel opens inside the sidebar, and the results of exports, backups and imports are reported beside the button that caused them. Since the first part of M5, it has the colours, type, buttons, icons and styled controls described in section 7, in all three themes. Since the second, it has the header bar with the account menu, `?` and the gear, the Settings page, a sidebar of sources and tags only, the 720 px list column, and the narrow layout with source pills and the filter sheet. Since the third, post cards are as described below, with Remove and Undo, copy results in a toast, and the tag popover opening from the start of its button in the library's own look; "No longer bookmarked" comes with live capture (M6). Milestone M5, Look and feel (SPEC 17), brings the rest to this section.
+> **As first built:** the library predates the look described here and in section 7. A tag's panel opens inside the sidebar. Since the first part of M5, it has the colours, type, buttons, icons and styled controls described in section 7, in all three themes. Since the second, it has the header bar with the account menu, `?` and the gear, the Settings page, a sidebar of sources and tags only, the 720 px list column, and the narrow layout with source pills and the filter sheet. Since the third, post cards are as described below, with Remove and Undo, copy results in a toast, and the tag popover opening from the start of its button in the library's own look; "No longer bookmarked" comes with live capture (M6). Since the fourth, the toolbar, the filters row, the backup reminder, No posts match, the empty library and the toasts are as described. Milestone M5, Look and feel (SPEC 17), brings the rest to this section.
 
 Full tab layout:
 
@@ -265,7 +265,7 @@ Settings is a page of the library, opened from the gear in its header, with "Bac
 - **Theme.** Match X uses the theme last seen on x.com: Light, Dim or Dark. Until x.com has been visited, it follows the system. System follows the system's light or dark setting. The tag button and popover on x.com always follow X, whatever the library uses.
 - The Danger zone panel has a red-tinted border, and its button is outlined in red. "Delete all data…" opens a dialog that says what goes and what stays: every post, tag and tag assignment, for every X account in this browser; settings stay, so that a choice such as not loading images from X is not undone; nothing on X changes. Its button stays disabled until "delete" is typed, in any case. Cancel has focus first. Afterwards the library shows its empty state, from which a backup can be restored.
 
-> **As first built:** the Settings page has the Appearance, Privacy, Backup and restore, and Danger zone groups. Match X and System preview the two themes they most often choose between, side by side. The result of a backup or export is reported beside its button until the toasts (M5, part 4). The Capture, Library and Shortcuts rows come with M6 and M7. The backup reminder shows in the library only until the popup (M7).
+> **As first built:** the Settings page has the Appearance, Privacy, Backup and restore, and Danger zone groups. Match X and System preview the two themes they most often choose between, side by side. The Capture, Library and Shortcuts rows come with M6 and M7. The backup reminder shows in the library only until the popup (M7).
 
 ## 5. Key flows
 
@@ -335,7 +335,7 @@ The post loses that source. Depending on the "Keep posts" setting it stays in th
 
 | Situation | Behaviour |
 | --- | --- |
-| Empty library | A small drawing, "Your library is empty", one sentence on what the extension does, and three numbered steps: open your bookmarks on X, scroll to the end or let xorganize scroll, tag posts anywhere on X. **Open my bookmarks on X** is the primary button, **Restore from a backup** the secondary one (5.6). A last line says that everything stays in this browser. |
+| Empty library | A small drawing, "Your library is empty", one sentence on what the extension does, and three numbered steps: open your bookmarks on X, scroll to the end or let xorganize scroll, tag posts anywhere on X. (Until auto-scroll, M6, the second step only says to scroll to the end.) **Open my bookmarks on X** is the primary button, **Restore from a backup** the secondary one (5.6). A last line says that everything stays in this browser. |
 | No search results | "No posts match", naming the search and the source ("Nothing in Bookmarks matches “tokio”"), with **Clear search** when there is a search and **Show all posts** (4.5). |
 | Post deleted or author suspended | Cached copy stays visible, labelled "Unavailable on X". |
 | X changes its layout and the tag button cannot be injected | The library and popup keep working. The popup shows "Inline tagging is unavailable, check for an update". |

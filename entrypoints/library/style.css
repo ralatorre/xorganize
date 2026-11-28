@@ -121,11 +121,6 @@ a.sidebar__item {
   gap: 10px;
 }
 
-.brand__heading {
-  margin: 0;
-  font: inherit;
-}
-
 .brand__name {
   font-size: 16px;
   font-weight: 650;
@@ -896,28 +891,57 @@ kbd {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin: 0 0 8px;
+  margin: -4px 0 14px;
 }
 
-.filters__label {
-  color: var(--text-2);
+.filters .link-button {
+  margin-left: 4px;
   font-size: 12.5px;
 }
 
-.summary {
+/* The toolbar: the view's title and count, then Sort and Export. */
+
+.toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  padding: 0 0 8px;
-  color: var(--text-2);
-  font-size: 13px;
+  min-height: 40px;
+  margin: 0 0 14px;
 }
 
-.summary__count {
+.toolbar__title {
   margin: 0;
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar__count {
+  margin-left: 4px;
+  color: var(--text-2);
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
+}
+
+.toolbar__menus {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.toolbar__menus .icon--tiny {
+  margin-right: -4px;
+  color: var(--text-3);
+}
+
+.toolbar__hint {
+  margin: -8px 0 14px;
+  color: var(--text-2);
+  font-size: 13px;
 }
 
 /* The list. Rows are placed by the virtualiser. */
@@ -1483,27 +1507,10 @@ div.modal__message p:last-child {
   margin: 0;
 }
 
-/* Exports and imports */
+/* Imports */
 
-.export {
+.import {
   display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-}
-
-.library__empty .import {
-  margin: 8px 0 0;
-  font-size: 13px;
-}
-
-.export__status {
-  color: var(--text-2);
-  font-size: 13px;
-}
-
-.export__status:empty {
-  display: none;
 }
 
 /* Settings (DESIGN, 4.7) */
@@ -1668,14 +1675,14 @@ div.modal__message p:last-child {
   background: var(--accent);
 }
 
-/* Backup reminder */
+/* Backup reminder: a tinted bar under the toolbar. */
 
 .reminder {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 12px;
+  gap: 10px 12px;
+  margin: 0 0 16px;
   padding: 10px 10px 10px 14px;
   border: 1px solid var(--notice-border);
   border-radius: 12px;
@@ -1685,37 +1692,177 @@ div.modal__message p:last-child {
 }
 
 .reminder__message {
-  flex: 1 1 16em;
+  flex: 1 1 260px;
   margin: 0;
+}
+
+.reminder__message strong {
+  font-weight: 600;
 }
 
 .reminder .button--quiet {
   color: var(--notice-text);
 }
 
-/* Empty states */
+/* No posts match: an outlined panel. */
 
-.library__empty {
-  padding: 64px 0;
+.no-matches {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 72px 24px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 16px;
   text-align: center;
 }
 
-.library__empty .button {
-  margin-top: 16px;
+.no-matches__icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 8px;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--text-2);
 }
 
-.library__empty h2 {
-  margin: 0 0 8px;
+.no-matches__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.no-matches__line {
+  max-width: 44ch;
+  margin: 0 0 14px;
+  color: var(--text-2);
+}
+
+.no-matches__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* The empty library (DESIGN, 6). */
+
+.empty {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 40px 0 64px;
+  text-align: center;
+}
+
+.empty__drawing {
+  display: block;
+  width: 180px;
+  height: 120px;
+  margin: 0 auto;
+}
+
+.empty__back {
+  fill: var(--field);
+  stroke: var(--border-strong);
+}
+
+.empty__card {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+}
+
+.empty__line {
+  fill: var(--chip);
+}
+
+.empty__strong {
+  fill: var(--border-strong);
+}
+
+.empty__tag {
+  fill: var(--accent);
+}
+
+.empty__hole {
+  fill: var(--surface);
+}
+
+.empty__title {
+  margin: 24px 0 8px;
   font-size: 26px;
   font-weight: 650;
   letter-spacing: -0.025em;
 }
 
-.library__empty p {
+.empty__lead {
   max-width: 46ch;
   margin: 0 auto;
   color: var(--text-2);
   font-size: 15px;
+}
+
+.empty__steps {
+  display: grid;
+  gap: 10px;
+  margin: 32px 0 28px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.empty__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.empty__number {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.empty__step-title,
+.empty__step-detail {
+  display: block;
+}
+
+.empty__step-title {
+  font-weight: 600;
+}
+
+.empty__step-detail {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.empty__privacy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 24px 0 0;
+  color: var(--text-2);
+  font-size: 12.5px;
 }
 
 /* Narrow layout: the side panel, and any window under 720 px (DESIGN, 4.5) */

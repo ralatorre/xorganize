@@ -1,21 +1,22 @@
 import { useState } from 'preact/hooks';
+import { Icon } from './Icon';
 
 /**
- * A quiet note that a backup is due, with a way to make one now or to be
- * reminded later. It goes once a backup is recorded.
+ * A tinted bar under the toolbar while a backup is due (DESIGN, 5.6), with a
+ * way to make one now or to be reminded later. It goes once a backup is
+ * recorded; what happened is said in a toast.
  */
 export function BackupReminder(props: {
   message: string;
-  /** Resolves to how many posts were exported, or undefined if it failed. */
-  onBackUp(): Promise<number | undefined>;
+  onBackUp(): Promise<unknown>;
   onLater(): void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
   return (
     <aside class="reminder" aria-label="Backup reminder">
+      <Icon name="backup" />
       <p class="reminder__message">
-        {props.message} {failed ? 'Could not export. Try again.' : null}
+        <strong>{props.message}</strong> A backup is one file you can restore from.
       </p>
       <button
         type="button"
@@ -23,10 +24,7 @@ export function BackupReminder(props: {
         disabled={busy}
         onClick={() => {
           setBusy(true);
-          void props.onBackUp().then((count) => {
-            setBusy(false);
-            setFailed(count === undefined);
-          });
+          void props.onBackUp().finally(() => setBusy(false));
         }}
       >
         Back up now

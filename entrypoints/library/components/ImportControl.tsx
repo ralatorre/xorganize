@@ -1,15 +1,14 @@
 import { useRef } from 'preact/hooks';
 
 /**
- * Picks a backup to import, and says how the last import went. The file goes
- * to `onFile`, which reads and checks it before anything is written.
+ * Picks a backup to import. The file goes to `onFile`, which reads and
+ * checks it before anything is written; how it went is said in a toast.
  */
 export function ImportControl(props: {
   label: string;
   /** The button's classes. Small by default. */
   buttonClass?: string;
   busy: boolean;
-  status: string;
   onFile(file: File): void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -35,9 +34,6 @@ export function ImportControl(props: {
           if (file) props.onFile(file);
         }}
       />
-      <span class="export__status" role="status">
-        {props.status}
-      </span>
     </div>
   );
 }

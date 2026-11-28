@@ -11,7 +11,9 @@ import { previewLines } from '@/src/library/import-messages';
 import type { LibraryImport } from '@/src/library/importer';
 import { deletionImpact, deletionMessage } from '@/src/library/tag-actions';
 import { DEFAULT_VIEW, changeView, type SourceFilter } from '@/src/library/view';
-import { viewScope } from '@/src/library/view-export';
+import { backupMessage, exportMessage, viewScope } from '@/src/library/view-export';
+import { isBackup, type LibraryExport } from '@/src/library/exporter';
+import { UNTAGGED_HINT, noMatchLine, viewTitle } from '@/src/library/toolbar';
 import type { SearchClient } from '@/src/search/client';
 import { parseQuery } from '@/src/search/query';
 import type { ExportFormat } from '@/src/transfer/format';
@@ -22,7 +24,7 @@ import { BackupReminder } from './components/BackupReminder';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { DeleteAllDialog } from './components/DeleteAllDialog';
 import { EmptyLibrary } from './components/EmptyLibrary';
-import { ExportControl } from './components/ExportControl';
+import { ExportMenu } from './components/ExportMenu';
 import { FilterBar } from './components/FilterBar';
 import { FilterSheet } from './components/FilterSheet';
 import { Header } from './components/Header';
@@ -34,11 +36,12 @@ import { PostList } from './components/PostList';
 import { SearchBox } from './components/SearchBox';
 import { SettingsPage } from './components/SettingsPage';
 import { ShortcutHelp } from './components/ShortcutHelp';
+import { SortMenu } from './components/SortMenu';
 import { Toasts } from './components/Toasts';
+import { Toolbar } from './components/Toolbar';
 import { Sidebar } from './components/Sidebar';
 import { SourcePills } from './components/SourcePills';
 import type { TagManagement } from './components/TagManager';
-import { ViewSummary } from './components/ViewSummary';
 import type { PostNavigation } from './use-post-navigation';
 import type { LoadPosts } from './use-post-views';
 import { useLiveQuery } from './use-live-query';
@@ -63,12 +66,8 @@ export interface LibraryProps {
   createPopover(accountId: AccountId): Popover;
   /** Puts text on the clipboard. False if the browser refused. */
   copy(text: string): Promise<boolean>;
-  /** Exports posts to a file the browser saves. Resolves to how many, or undefined if it failed. */
-  exportPosts(
-    accountId: AccountId,
-    scope: ExportScope,
-    format: ExportFormat,
-  ): Promise<number | undefined>;
+  /** Exports posts to a file the browser saves. Resolves to what was saved, or undefined if it failed. */
+  exportPosts: LibraryExport;
   /** Reads a backup the user picked, and imports it. */
   importer: LibraryImport;
   /** Turns images from X on or off. */
@@ -95,8 +94,6 @@ export interface LibraryProps {
   children?: ComponentChildren;
 }
 
-const VIEW_FORMATS: Record<ExportFormat, string> = { json: 'JSON', csv: 'CSV' };
-
 /** A question the library is asking, or the shortcut list. */
 type Dialog =
   | { kind: 'delete-tag'; tag: TagSuggestion }
@@ -120,6 +117,10 @@ export function App(props: LibraryProps) {
   const searchInput = useRef<HTMLInputElement>(null);
   const navigation = useRef<PostNavigation | undefined>(undefined);
   const toasts = useToasts();
+  // How a picked file or an import went is said in a toast.
+  useEffect(() => {
+    if (flow.step === 'idle' && flow.status !== '') toasts.show(flow.status);
+  }, [flow]);
 
   const library = useLiveQuery(catalogue, EMPTY_CATALOGUE);
   const account = library?.account;
@@ -185,7 +186,6 @@ export function App(props: LibraryProps) {
       label={label}
       {...(buttonClass ? { buttonClass } : {})}
       busy={isBusy(flow)}
-      status={flow.step === 'idle' ? flow.status : ''}
       onFile={pickBackup}
     />
   );
@@ -202,6 +202,13 @@ export function App(props: LibraryProps) {
     ) : null;
 
   const closeDialog = () => setDialog(undefined);
+  // Every export reports in a toast: a backup by its file's name, anything else by its count.
+  const exportAndSay = (accountId: AccountId, scope: ExportScope, format: ExportFormat) =>
+    exportPosts(accountId, scope, format).then((exported) =>
+      toasts.show(
+        isBackup(scope, format) ? backupMessage(exported) : exportMessage(exported, format),
+      ),
+    );
   const time = now();
   const empty = state.account === undefined || state.counts.all === 0;
   const accountId = empty ? undefined : state.account;
@@ -243,8 +250,8 @@ export function App(props: LibraryProps) {
               ? undefined
               : {
                   lastBackup: lastBackupLine(library.backup, time),
-                  backUp: () => exportPosts(accountId, 'library', 'json'),
-                  exportCsv: () => exportPosts(accountId, 'library', 'csv'),
+                  backUp: () => void exportAndSay(accountId, 'library', 'json'),
+                  exportCsv: () => void exportAndSay(accountId, 'library', 'csv'),
                 }
           }
           restore={importControl('Choose a file…', 'button')}
@@ -265,7 +272,9 @@ export function App(props: LibraryProps) {
       <div class="app">
         <Header page="library" onHelp={help} />
         <main class="shell shell--single">
-          <EmptyLibrary>{importControl('Restore from a backup')}</EmptyLibrary>
+          <EmptyLibrary>
+            {importControl('Restore from a backup', 'button button--large')}
+          </EmptyLibrary>
           {children}
         </main>
         {shared}
@@ -328,27 +337,32 @@ export function App(props: LibraryProps) {
         />
         <main class="content">
           <SourcePills counts={state.counts} selected={view.source} onSelect={pickSource} />
+          <Toolbar
+            title={viewTitle(view.source, state.selected)}
+            status={summaryOf(text, state.ids.length)}
+            {...(view.source === 'untagged' ? { hint: UNTAGGED_HINT } : {})}
+          >
+            <SortMenu sort={view.sort} onSort={(sort) => change({ type: 'sort', sort })} />
+            {listed && state.ids.length > 0 ? (
+              <ExportMenu
+                count={state.ids.length}
+                onExport={(format) => void exportAndSay(accountId, viewScope(state), format)}
+              />
+            ) : null}
+          </Toolbar>
+          <FilterBar
+            query={view.query}
+            selected={state.selected}
+            match={view.match}
+            onChange={change}
+          />
           {reminder.due ? (
             <BackupReminder
               message={reminderMessage(reminder, time)}
-              onBackUp={() => exportPosts(accountId, 'library', 'json')}
+              onBackUp={() => exportAndSay(accountId, 'library', 'json')}
               onLater={() => dismissBackupReminder(accountId)}
             />
           ) : null}
-          <FilterBar selected={state.selected} match={view.match} onChange={change} />
-          <ViewSummary
-            status={summaryOf(text, state.ids.length)}
-            sort={view.sort}
-            onSort={(sort) => change({ type: 'sort', sort })}
-          >
-            {listed && state.ids.length > 0 ? (
-              <ExportControl
-                label="Export view"
-                formats={VIEW_FORMATS}
-                onExport={(format) => exportPosts(accountId, viewScope(state), format)}
-              />
-            ) : null}
-          </ViewSummary>
           {!listed ? null : state.ids.length > 0 ? (
             <PostList
               accountId={accountId}
@@ -360,7 +374,13 @@ export function App(props: LibraryProps) {
               now={time}
             />
           ) : (
-            <NoMatches onClear={() => change({ type: 'clear' })} />
+            <NoMatches
+              line={noMatchLine(view.source, view.query, state.selected.length)}
+              {...(view.query.trim() === ''
+                ? {}
+                : { onClearSearch: () => change({ type: 'query', query: '' }) })}
+              onShowAll={() => change({ type: 'clear' })}
+            />
           )}
           {children}
         </main>

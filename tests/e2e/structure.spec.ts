@@ -202,3 +202,37 @@ test('below 720 px, sources are pills and tags are chosen in a sheet', async ({
   await pills.getByRole('button', { name: 'Tagged only 0' }).click();
   await expect(library.getByRole('heading', { name: 'No posts match' })).toBeVisible();
 });
+
+test('the toolbar titles the view, and the filters row shows what narrows it', async ({
+  context,
+  extensionId,
+}) => {
+  const library = await context.newPage();
+  await openLibrary(library, extensionId);
+  const title = library.getByRole('heading', { level: 1 });
+  await expect(title).toHaveText('All posts');
+
+  // One tag among all posts titles the view by that tag.
+  await library
+    .getByRole('navigation', { name: 'Library' })
+    .getByRole('button', { name: /^rust/ })
+    .click();
+  await expect(title).toHaveText('rust');
+  const filters = library.getByRole('group', { name: 'Filters' });
+  await expect(filters.getByRole('button', { name: 'Remove filter rust' })).toBeVisible();
+
+  // A search shows as a chip, which clears it.
+  await library.getByRole('searchbox', { name: 'Search posts' }).fill('about');
+  await filters.getByRole('button', { name: 'Clear search' }).click();
+  await expect(library.getByRole('searchbox', { name: 'Search posts' })).toHaveValue('');
+  await filters.getByRole('button', { name: 'Clear all' }).click();
+  await expect(filters).toBeHidden();
+
+  // Untagged is the inbox, and says so.
+  await library.getByRole('button', { name: /^Untagged 0$/ }).click();
+  await expect(title).toHaveText('Untagged');
+  await expect(
+    library.getByText('Bookmarked or liked, with no tag yet.', { exact: false }),
+  ).toBeVisible();
+  await expect(library.getByRole('button', { name: 'Export', exact: true })).toHaveCount(0);
+});
