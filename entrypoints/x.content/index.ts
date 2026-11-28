@@ -40,7 +40,6 @@ export default defineContentScript({
       send: (message) => send<CaptureReply>(message),
       onCaptured: (source, counts) => banner.show(source, counts),
       onFailed: () => banner.fail(),
-      onOff: (source) => banner.off(source),
       postFromPage: (id) => postFromPage(id),
     });
 

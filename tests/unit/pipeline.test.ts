@@ -25,7 +25,6 @@ function setup(
   const sent: CaptureMessage[] = [];
   const captured: Array<[string, { bookmarks: number; likes: number }]> = [];
   const failures: string[] = [];
-  const off: string[] = [];
   const viewerId = 'viewerId' in options ? options.viewerId : VIEWER;
   const reply =
     'reply' in options ? options.reply : { ok: true, counts: { bookmarks: 3, likes: 1 } };
@@ -37,10 +36,9 @@ function setup(
     },
     onCaptured: (source, counts) => captured.push([source, counts]),
     onFailed: () => failures.push('failed'),
-    onOff: (source) => off.push(source),
     postFromPage: (id) => options.onPage?.find((post) => post.id === id),
   });
-  return { capture, sent, captured, failures, off };
+  return { capture, sent, captured, failures };
 }
 
 function response(
@@ -74,19 +72,6 @@ const bookmarksPage = bookmarksTimeline([
   cursorEntry('top', '9004'),
   cursorEntry('bottom', '9000'),
 ]);
-
-describe('a source whose capture is off', () => {
-  it('says so for a page of its timeline, but not for a bookmark made on X', async () => {
-    const { capture, captured, failures, off } = setup({ reply: { ok: false, off: true } });
-    await capture(response('Bookmarks', bookmarksPage));
-    expect(off).toEqual(['bookmark']);
-    await capture(mutation('CreateBookmark', '103'));
-    await capture(mutation('DeleteBookmark', '103'));
-    expect(off).toEqual(['bookmark']);
-    expect(captured).toEqual([]);
-    expect(failures).toEqual([]);
-  });
-});
 
 describe('source timelines', () => {
   it('sends a bookmarks page to be stored, and reports the totals', async () => {

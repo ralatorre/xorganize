@@ -5,7 +5,6 @@
  */
 
 import { DIAGNOSTICS } from '@/src/build';
-import type { SourceKind } from '@/src/capture/operations';
 import type { TagChange } from '@/src/db/tags';
 import type { AccountProfile, Counts, TagSuggestion, TagSummary } from '@/src/db/types';
 import type { Theme } from '@/src/dom/theme';
@@ -61,8 +60,6 @@ export interface WorkerDependencies {
   /** This extension's own id. Messages from anything else are ignored. */
   extensionId: string;
   store: CaptureStore;
-  /** Whether the settings let a source be captured. Read for each capture. */
-  captures(source: SourceKind): Promise<boolean>;
   tags: TagStore;
   /** Keeps the theme x.com shows, for the library's Match X. */
   recordTheme(theme: Theme): Promise<unknown>;
@@ -109,7 +106,12 @@ export function createWorkerHandler(deps: WorkerDependencies) {
     }
 
     if (message.type === 'capture/posts' || message.type === 'capture/clear') {
-      return capture(deps, message);
+      const stored =
+        message.type === 'capture/posts' ? deps.store.save(message) : deps.store.clear(message);
+      return stored.then(
+        (counts): CaptureReply => ({ ok: true, counts }),
+        (): CaptureReply => ({ ok: false }),
+      );
     }
 
     if (
@@ -124,22 +126,6 @@ export function createWorkerHandler(deps: WorkerDependencies) {
     if (DIAGNOSTICS && deps.diagnostics) return record(deps.diagnostics, message);
     return undefined;
   };
-}
-
-/** Stores a capture, unless its source is turned off (SPEC, 7.3), and says which. */
-async function capture(
-  deps: WorkerDependencies,
-  message: CapturePostsMessage | CaptureClearMessage,
-): Promise<CaptureReply> {
-  try {
-    if (!(await deps.captures(message.source))) return { ok: false, off: true };
-    const counts = await (message.type === 'capture/posts'
-      ? deps.store.save(message)
-      : deps.store.clear(message));
-    return { ok: true, counts };
-  } catch {
-    return { ok: false };
-  }
 }
 
 function record(diagnostics: DiagnosticsSink, message: DiagnosticsMessage): Promise<Reply> {

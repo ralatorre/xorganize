@@ -2,7 +2,6 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { normalisePost } from '@/src/capture/normalise';
 import {
-  DEFAULT_SETTINGS,
   authorsOf,
   recordXTheme,
   saveCapture,
@@ -387,7 +386,7 @@ describe('reading the library', () => {
     await updateSettings(db, { remoteImages: false });
     expect(await loadCatalogue(db)).toEqual({
       ...EMPTY_CATALOGUE,
-      settings: { ...DEFAULT_SETTINGS, remoteImages: false },
+      settings: { remoteImages: false, backupReminderDays: 30, theme: 'x' },
     });
     expect((await loadBrowse(DEFAULT_VIEW)).ids).toEqual([]);
   });
@@ -417,7 +416,7 @@ describe('reading the library', () => {
     ]);
     expect(browse.ids).toEqual(['31', '21', '13', '12', '11']);
     expect(browse.selected).toEqual([]);
-    expect(browse.settings).toEqual(DEFAULT_SETTINGS);
+    expect(browse.settings).toEqual({ remoteImages: true, backupReminderDays: 30, theme: 'x' });
   });
 
   it('keeps each timeline in its own order', async () => {

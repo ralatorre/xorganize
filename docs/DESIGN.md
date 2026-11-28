@@ -248,8 +248,6 @@ Settings is a page of the library, opened from the gear in its header, with "Bac
 
 | Group | Setting | Default |
 | --- | --- | --- |
-| Capture | Capture bookmarks | On |
-| Capture | Capture likes | On |
 | Capture | Prompt for tags after bookmarking | On |
 | Capture | Prompt for tags after liking | Off |
 | Appearance | Theme: Match X, System, Light, Dim or Dark, each shown as a small preview | Match X |
@@ -262,11 +260,11 @@ Settings is a page of the library, opened from the gear in its header, with "Bac
 | Backup and restore | Backup reminder | Every 30 days |
 | Danger zone | Delete all data | Requires typing a confirmation word. Deletes every account's posts, tags and tag assignments; keeps settings |
 
-- **Capture.** Each source can be turned off, for someone who wants only bookmarks, or only likes, in the library. While a source is off, its timeline is not stored, and bookmarking or liking on X is not followed, nor is undoing it; what the library already holds stays. On the Bookmarks or Likes page, the status line says that capture of that source is off, so a count that does not grow is explained. A bookmark or like made elsewhere says nothing: the user chose that.
+- **Capture.** Bookmarks and likes are always both captured; there is no switch to stop one. The sidebar already keeps them apart, so someone who wants only bookmarks need never open Likes. Everything stays on the device either way, and a source that was off would leave the library following X for some posts and not others.
 - **Theme.** Match X uses the theme last seen on x.com: Light, Dim or Dark. Until x.com has been visited, it follows the system. System follows the system's light or dark setting. The tag button and popover on x.com always follow X, whatever the library uses.
 - The Danger zone panel has a red-tinted border, and its button is outlined in red. "Delete all data…" opens a dialog that says what goes and what stays: every post, tag and tag assignment, for every X account in this browser; settings stay, so that a choice such as not loading images from X is not undone; nothing on X changes. Its button stays disabled until "delete" is typed, in any case. Cancel has focus first. Afterwards the library shows its empty state, from which a backup can be restored.
 
-> **As first built:** the Settings page has the Capture, Appearance, Privacy, Backup and restore, and Danger zone groups. Match X and System preview the two themes they most often choose between, side by side. The two tag prompt rows come with the tag prompt (M6), and Shortcuts with M7. The backup reminder shows in the library only until the popup (M7).
+> **As first built:** the Settings page has the Appearance, Privacy, Backup and restore, and Danger zone groups. Match X and System preview the two themes they most often choose between, side by side. The Capture rows come with the tag prompt (M6), and Shortcuts with M7. The backup reminder shows in the library only until the popup (M7).
 
 ## 5. Key flows
 

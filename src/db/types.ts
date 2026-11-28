@@ -91,10 +91,6 @@ export interface Settings {
   /** Days after the last backup before the library reminds the user to make one. 0: never. */
   backupReminderDays: number;
   theme: ThemeSetting;
-  /** Store the Bookmarks timeline and posts bookmarked on X. */
-  captureBookmarks: boolean;
-  /** Store the account's Likes timeline and posts liked on X. */
-  captureLikes: boolean;
 }
 
 /** When the account's library was last backed up, and what else the backup reminder counts from. */

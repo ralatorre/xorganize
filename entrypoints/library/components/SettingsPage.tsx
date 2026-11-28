@@ -1,6 +1,5 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { SourceKind } from '@/src/capture/operations';
 import type { AccountId, Settings, StoredAccount, ThemeSetting } from '@/src/db/types';
 import { sizeLine, storedLine } from '@/src/library/accounts';
 import { REMINDER_CHOICES } from '@/src/library/backup-reminder';
@@ -8,12 +7,10 @@ import type { IconName } from '../icons';
 import { Icon } from './Icon';
 import { Select } from './Select';
 import { SettingRow } from './SettingRow';
-import { SettingSwitch } from './SettingSwitch';
 import { SettingsGroup } from './SettingsGroup';
 import { ThemePicker } from './ThemePicker';
 
 const GROUPS: ReadonlyArray<{ id: string; title: string; icon: IconName }> = [
-  { id: 'capture', title: 'Capture', icon: 'bookmark' },
   { id: 'appearance', title: 'Appearance', icon: 'appearance' },
   { id: 'privacy', title: 'Privacy', icon: 'privacy' },
   { id: 'backup', title: 'Backup and restore', icon: 'backup' },
@@ -42,7 +39,6 @@ export function SettingsPage(props: {
   exports: SettingsExports | undefined;
   /** The control that picks a backup to restore. */
   restore: ComponentChildren;
-  onCapture(source: SourceKind, enabled: boolean): void;
   onTheme(theme: ThemeSetting): void;
   onImages(enabled: boolean): void;
   onReminder(days: number): void;
@@ -71,35 +67,6 @@ export function SettingsPage(props: {
       </nav>
       <main class="content settings">
         <SettingsGroup
-          id="capture"
-          title="Capture"
-          description="What xorganize saves from x.com. Turning one off keeps what is already saved, but no longer follows its changes on X."
-        >
-          <SettingRow
-            id="capture-bookmarks"
-            title="Capture bookmarks"
-            description="Saves your Bookmarks page as it loads, and each post you bookmark on X."
-          >
-            <SettingSwitch
-              id="capture-bookmarks"
-              checked={settings.captureBookmarks}
-              onChange={(enabled) => props.onCapture('bookmark', enabled)}
-            />
-          </SettingRow>
-          <SettingRow
-            id="capture-likes"
-            title="Capture likes"
-            description="Saves your Likes as they load, and each post you like on X."
-          >
-            <SettingSwitch
-              id="capture-likes"
-              checked={settings.captureLikes}
-              onChange={(enabled) => props.onCapture('like', enabled)}
-            />
-          </SettingRow>
-        </SettingsGroup>
-
-        <SettingsGroup
           id="appearance"
           title="Appearance"
           description="Match X uses the theme you last had on x.com. The tag button on x.com always follows X."
@@ -117,7 +84,15 @@ export function SettingsPage(props: {
             title="Show images from X"
             description="Avatars and thumbnails load from X’s image server, without cookies. Turned off, the library makes no network requests at all."
           >
-            <SettingSwitch id="images" checked={settings.remoteImages} onChange={props.onImages} />
+            <input
+              type="checkbox"
+              role="switch"
+              class="switch"
+              aria-labelledby="images-title"
+              aria-describedby="images-description"
+              checked={settings.remoteImages}
+              onChange={(event) => props.onImages(event.currentTarget.checked)}
+            />
           </SettingRow>
           <SettingRow
             id="stored"

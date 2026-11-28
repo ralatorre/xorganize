@@ -139,8 +139,7 @@ export interface AccountSeenMessage extends AccountProfile {
 }
 
 /** The worker's answer to a capture message: the account's totals afterwards. */
-/** `off`: not stored, because capturing that source is turned off in settings. */
-export type CaptureReply = { ok: true; counts: Counts } | { ok: false; off?: true };
+export type CaptureReply = { ok: true; counts: Counts } | { ok: false };
 
 /** The tags on posts that are on screen. */
 export interface TagsForPostsMessage {

@@ -1,7 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  DEFAULT_SETTINGS,
   backupTimes,
   deleteAllData,
   dismissBackupReminder,
@@ -221,7 +220,7 @@ describe('deleteAllData', () => {
       {
         accountId: '',
         key: 'settings',
-        value: { ...DEFAULT_SETTINGS, remoteImages: false },
+        value: { remoteImages: false, backupReminderDays: 30, theme: 'x' },
       },
     ]);
     expect((await loadCatalogue(db)).account).toBeUndefined();

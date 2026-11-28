@@ -4,8 +4,6 @@ import { normalisePost, type CapturedPost } from '@/src/capture/normalise';
 import {
   activeAccount,
   chooseAccount,
-  captureChange,
-  captures,
   clearSource,
   counts,
   lostAt,
@@ -489,13 +487,7 @@ describe('the order of a source', () => {
 });
 
 describe('settings', () => {
-  const DEFAULTS: Settings = {
-    remoteImages: true,
-    backupReminderDays: 30,
-    theme: 'x',
-    captureBookmarks: true,
-    captureLikes: true,
-  };
+  const DEFAULTS: Settings = { remoteImages: true, backupReminderDays: 30, theme: 'x' };
 
   it('show images from X unless turned off', async () => {
     expect(await readSettings(db)).toEqual(DEFAULTS);
@@ -526,27 +518,11 @@ describe('settings', () => {
     expect((await readSettings(db)).backupReminderDays).toBe(30);
   });
 
-  it('capture both sources unless one is turned off', async () => {
-    const settings = await updateSettings(db, { captureLikes: false });
-    expect(settings).toMatchObject({ captureBookmarks: true, captureLikes: false });
-    expect(captures(settings, 'bookmark')).toBe(true);
-    expect(captures(settings, 'like')).toBe(false);
-    expect(captures({ ...DEFAULTS, captureBookmarks: false }, 'bookmark')).toBe(false);
-    expect(captureChange('bookmark', false)).toEqual({ captureBookmarks: false });
-    expect(captureChange('like', true)).toEqual({ captureLikes: true });
-  });
-
   it('fall back to defaults for values of the wrong type', async () => {
     await db.meta.put({
       accountId: '',
       key: 'settings',
-      value: {
-        remoteImages: 'no',
-        backupReminderDays: '7',
-        theme: 1,
-        captureBookmarks: 0,
-        captureLikes: 'off',
-      },
+      value: { remoteImages: 'no', backupReminderDays: '7', theme: 1 },
     });
     expect(await readSettings(db)).toEqual(DEFAULTS);
     await db.meta.put({ accountId: '', key: 'settings', value: 'garbage' });

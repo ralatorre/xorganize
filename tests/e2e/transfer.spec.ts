@@ -378,13 +378,7 @@ test('deletes all data once the word is typed, keeping settings', async ({
     {
       accountId: '',
       key: 'settings',
-      value: {
-        remoteImages: false,
-        backupReminderDays: 30,
-        theme: 'x',
-        captureBookmarks: true,
-        captureLikes: true,
-      },
+      value: { remoteImages: false, backupReminderDays: 30, theme: 'x' },
     },
   ]);
 });

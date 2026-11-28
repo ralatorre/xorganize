@@ -51,19 +51,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   remoteImages: true,
   backupReminderDays: 30,
   theme: 'x',
-  captureBookmarks: true,
-  captureLikes: true,
 };
 
-/** The settings change that turns capturing a source on or off. */
-export function captureChange(source: SourceKind, enabled: boolean): Partial<Settings> {
-  return source === 'bookmark' ? { captureBookmarks: enabled } : { captureLikes: enabled };
-}
-
-/** Whether the settings let a source be captured (SPEC, 7.3). */
-export function captures(settings: Settings, source: SourceKind): boolean {
-  return source === 'bookmark' ? settings.captureBookmarks : settings.captureLikes;
-}
 const SORT_WIDTH = 30;
 
 /**
@@ -466,20 +455,17 @@ export async function activeAccount(db: LibraryDatabase): Promise<AccountId | un
 export async function readSettings(db: LibraryDatabase): Promise<Settings> {
   const row = await db.meta.get(['', SETTINGS]);
   const stored = typeof row?.value === 'object' && row.value !== null ? row.value : {};
-  const { remoteImages, backupReminderDays, theme, captureBookmarks, captureLikes } =
-    stored as Partial<Record<keyof Settings, unknown>>;
-  const flag = (value: unknown, fallback: boolean) =>
-    typeof value === 'boolean' ? value : fallback;
+  const { remoteImages, backupReminderDays, theme } = stored as Partial<
+    Record<keyof Settings, unknown>
+  >;
   return {
-    remoteImages: flag(remoteImages, DEFAULT_SETTINGS.remoteImages),
+    remoteImages: typeof remoteImages === 'boolean' ? remoteImages : DEFAULT_SETTINGS.remoteImages,
     backupReminderDays: (BACKUP_REMINDER_DAYS as readonly unknown[]).includes(backupReminderDays)
       ? (backupReminderDays as number)
       : DEFAULT_SETTINGS.backupReminderDays,
     theme: (THEME_SETTINGS as readonly unknown[]).includes(theme)
       ? (theme as ThemeSetting)
       : DEFAULT_SETTINGS.theme,
-    captureBookmarks: flag(captureBookmarks, DEFAULT_SETTINGS.captureBookmarks),
-    captureLikes: flag(captureLikes, DEFAULT_SETTINGS.captureLikes),
   };
 }
 
