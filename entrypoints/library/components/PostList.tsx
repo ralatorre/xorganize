@@ -22,6 +22,8 @@ export function PostList(props: {
   images: boolean;
   actions: PostActions;
   navigation: RefObject<PostNavigation | undefined>;
+  /** The time, for dates within this year. */
+  now: number;
 }) {
   const { ids } = props;
   const list = useRef<HTMLOListElement>(null);
@@ -62,7 +64,7 @@ export function PostList(props: {
             style={{ transform: `translateY(${row.start - offset}px)` }}
           >
             {view ? (
-              <PostCard view={view} images={props.images} actions={props.actions} />
+              <PostCard view={view} images={props.images} actions={props.actions} now={props.now} />
             ) : (
               <div class="post post--loading" aria-busy="true" />
             )}

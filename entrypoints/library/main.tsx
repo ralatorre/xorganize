@@ -122,6 +122,8 @@ const popoverFor = (accountId: AccountId) =>
     guard,
     theme: () => theme,
     mountPoint: () => document.body,
+    align: 'start',
+    look: 'library',
     ...createLibraryTagging({ edits, accountId, schedule: (task) => void setTimeout(task, 0) }),
   });
 

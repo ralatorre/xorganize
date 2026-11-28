@@ -213,7 +213,7 @@ test('a backup restores the library in a clean profile', async ({ context, exten
 
     // A CSV file is refused, with what to do instead.
     await pick(restored, 'Restore from a backup', csvPath);
-    await expect(restored.getByRole('status')).toHaveText(/This is not a JSON backup/);
+    await expect(restored.getByText(/This is not a JSON backup/)).toBeVisible();
 
     // The backup: previewed, then merged into the empty library.
     await pick(restored, 'Restore from a backup', backupPath);

@@ -6,7 +6,7 @@
  * announcement.
  */
 
-import { deleteAllData, removePost } from '@/src/db/repo';
+import { deleteAllData, removePost, restorePost, type RemovedPost } from '@/src/db/repo';
 import type { LibraryDatabase } from '@/src/db/schema';
 import {
   deleteTag,
@@ -38,7 +38,10 @@ export interface LibraryEdits {
   recolour(accountId: AccountId, tagId: TagId, colour: number): Promise<boolean>;
   merge(accountId: AccountId, fromId: TagId, intoId: TagId): Promise<boolean>;
   deleteTag(accountId: AccountId, tagId: TagId): Promise<TagDeletion>;
-  removePost(accountId: AccountId, postId: PostId): Promise<void>;
+  /** Resolves to what was removed, for Undo, or undefined if the post was not there. */
+  removePost(accountId: AccountId, postId: PostId): Promise<RemovedPost | undefined>;
+  /** Puts back what `removePost` removed. */
+  restorePost(removed: RemovedPost): Promise<void>;
   /** Deletes every account's library, keeping settings. */
   deleteAll(): Promise<void>;
 }
@@ -73,7 +76,9 @@ export function createLibraryEdits(
     merge: (accountId, fromId, intoId) =>
       announced(accountId, mergeTags(db, accountId, fromId, intoId), (done) => done),
     deleteTag: (accountId, tagId) => announced(accountId, deleteTag(db, accountId, tagId)),
-    removePost: (accountId, postId) => announced(accountId, removePost(db, accountId, postId)),
+    removePost: (accountId, postId) =>
+      announced(accountId, removePost(db, accountId, postId), (removed) => removed !== undefined),
+    restorePost: (removed) => announced(removed.post.accountId, restorePost(db, removed)),
     deleteAll: async () => {
       for (const accountId of await deleteAllData(db)) announce(accountId);
     },

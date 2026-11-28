@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { normalisePost } from '@/src/capture/normalise';
-import { activeAccount, clearSource, removePost, saveCapture } from '@/src/db/repo';
+import { activeAccount, clearSource, removePost, restorePost, saveCapture } from '@/src/db/repo';
 import { LibraryDatabase } from '@/src/db/schema';
 import {
   UnknownPostError,
@@ -317,5 +317,53 @@ describe('removePost', () => {
     expect(await useCount(db, ACCOUNT, 'tag-1')).toBe(1);
     expect(await useCount(db, ACCOUNT, 'tag-2')).toBe(0);
     expect(await db.tags.count()).toBe(2);
+  });
+
+  it('returns nothing for a post that is not there', async () => {
+    expect(await removePost(db, ACCOUNT, '404')).toBeUndefined();
+  });
+
+  it('can be undone: the post and its tags come back as they were', async () => {
+    await change({ postId: '1', add: ['a', 'b'], post: post('1', { bookmarked: true }) });
+    const before = { post: await stored('1'), tags: await db.postTags.toArray() };
+    const removed = await removePost(db, ACCOUNT, '1');
+    await restorePost(db, removed!);
+    expect(await stored('1')).toEqual(before.post);
+    expect(await db.postTags.toArray()).toEqual(before.tags);
+  });
+
+  it('leaves out a tag deleted before the undo, and keeps a copy stored again meanwhile', async () => {
+    await change({ postId: '1', add: ['a', 'b'], post: post('1', { bookmarked: true }) });
+    await change({ postId: '2', add: ['b'], post: post('2') });
+    const removed = await removePost(db, ACCOUNT, '1');
+    await deleteTag(db, ACCOUNT, 'tag-1');
+    await restorePost(db, removed!);
+    expect(await useCount(db, ACCOUNT, 'tag-1')).toBe(0);
+    expect(await useCount(db, ACCOUNT, 'tag-2')).toBe(2);
+    expect((await stored('1'))?.hasTags).toBe(1);
+  });
+
+  it('marks a restored post untagged when none of its tags are left', async () => {
+    await change({ postId: '1', add: ['a'], post: post('1', { bookmarked: true }) });
+    const removed = await removePost(db, ACCOUNT, '1');
+    await deleteTag(db, ACCOUNT, 'tag-1');
+    await restorePost(db, removed!);
+    expect((await stored('1'))?.hasTags).toBe(0);
+    expect(await db.postTags.count()).toBe(0);
+  });
+
+  it('keeps the post as stored again from X, with the tags put back', async () => {
+    await change({ postId: '1', add: ['a'], post: post('1', { bookmarked: true }) });
+    const removed = await removePost(db, ACCOUNT, '1');
+    await saveCapture(db, {
+      accountId: ACCOUNT,
+      source: 'like',
+      items: [{ post: post('1', { favorited: true }) }],
+      referenced: [],
+      unavailable: [],
+    });
+    await restorePost(db, removed!);
+    expect(await stored('1')).toMatchObject({ isLike: 1, hasTags: 1 });
+    expect(await useCount(db, ACCOUNT, 'tag-1')).toBe(1);
   });
 });

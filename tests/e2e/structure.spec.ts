@@ -1,9 +1,8 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { expect, openSettings, test } from './fixtures';
+import { DAY, VIEWER, openSeeded, storedPost, storedTag } from './seed';
 
-const VIEWER = '9000000000000000001';
 const SECOND = '9000000000000000002';
-const DAY = Date.UTC(2026, 0, 2);
 
 const AVATAR = 'https://pbs.twimg.com/profile_images/1/example_normal.jpg';
 
@@ -48,45 +47,14 @@ async function serveStandIn(context: BrowserContext) {
   });
 }
 
-const post = (accountId: string, id: string, text: string, tagged = false) => ({
-  accountId,
-  id,
-  url: `https://x.com/example_user/status/${id}`,
-  text,
-  createdAt: DAY,
-  author: { handle: 'example_user', name: 'Example User' },
-  media: [],
-  links: [],
-  sensitive: false,
-  isBookmark: 1,
-  isLike: 0,
-  hasTags: tagged ? 1 : 0,
-  bookmarkSort: id.padStart(30, '0'),
-  partial: false,
-  unavailable: false,
-  firstSeenAt: DAY,
-  lastSeenAt: DAY,
-  savedAt: DAY,
-});
-
-const tag = (id: string, name: string) => ({
-  accountId: VIEWER,
-  id,
-  name,
-  nameKey: name,
-  color: 0,
-  createdAt: DAY,
-  lastUsedAt: DAY,
-});
-
 /** Two posts and two tags for the viewer, and one post for a second account. */
 const RECORDS = {
   posts: [
-    post(VIEWER, '101', 'A post about rust', true),
-    post(VIEWER, '102', 'A post about bread', true),
-    post(SECOND, '201', 'A post of the second account'),
+    storedPost(VIEWER, '101', 'A post about rust', { hasTags: 1 }),
+    storedPost(VIEWER, '102', 'A post about bread', { hasTags: 1 }),
+    storedPost(SECOND, '201', 'A post of the second account'),
   ],
-  tags: [tag('t-rust', 'rust'), tag('t-bread', 'bread')],
+  tags: [storedTag('t-rust', 'rust'), storedTag('t-bread', 'bread')],
   postTags: [
     { accountId: VIEWER, postId: '101', tagId: 't-rust', taggedAt: DAY },
     { accountId: VIEWER, postId: '102', tagId: 't-bread', taggedAt: DAY },
@@ -94,35 +62,7 @@ const RECORDS = {
   meta: [{ accountId: '', key: 'activeAccount', value: VIEWER }],
 };
 
-async function openSeeded(page: Page, extensionId: string) {
-  await page.goto(`chrome-extension://${extensionId}/library.html`);
-  await expect(page.getByRole('heading', { name: 'Your library is empty' })).toBeVisible();
-  await page.evaluate(
-    (records) =>
-      new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('xorganize');
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          const db = request.result;
-          const names = Object.keys(records);
-          const write = db.transaction(names, 'readwrite');
-          for (const name of names) {
-            for (const record of records[name as keyof typeof records]) {
-              write.objectStore(name).put(record);
-            }
-          }
-          write.oncomplete = () => {
-            db.close();
-            resolve();
-          };
-          write.onerror = () => reject(write.error);
-        };
-      }),
-    RECORDS,
-  );
-  await page.reload();
-  await expect(page.locator('.posts .post__text')).toHaveCount(2);
-}
+const openLibrary = (page: Page, extensionId: string) => openSeeded(page, extensionId, RECORDS, 2);
 
 const texts = (page: Page) => page.locator('.posts .post__text');
 
@@ -132,7 +72,7 @@ test('names the account from x.com, and switches between the accounts in this br
 }) => {
   await serveStandIn(context);
   const library = await context.newPage();
-  await openSeeded(library, extensionId);
+  await openLibrary(library, extensionId);
 
   // Until x.com has been seen, the account is named by its ID.
   const menu = library.getByRole('button', { name: 'X account ···0001' });
@@ -171,7 +111,7 @@ test('shows no picture of the account once images from X are off', async ({
 }) => {
   await serveStandIn(context);
   const library = await context.newPage();
-  await openSeeded(library, extensionId);
+  await openLibrary(library, extensionId);
   const site = await context.newPage();
   await site.goto('https://x.com/home');
   const named = library.getByRole('button', { name: '@example_user' });
@@ -185,7 +125,7 @@ test('shows no picture of the account once images from X are off', async ({
 
 test('Settings is a page of its own, which Back leaves', async ({ context, extensionId }) => {
   const library = await context.newPage();
-  await openSeeded(library, extensionId);
+  await openLibrary(library, extensionId);
 
   await openSettings(library);
   expect(new URL(library.url()).hash).toBe('#settings');
@@ -224,7 +164,7 @@ test('below 720 px, sources are pills and tags are chosen in a sheet', async ({
 }) => {
   const library = await context.newPage();
   await library.setViewportSize({ width: 390, height: 844 });
-  await openSeeded(library, extensionId);
+  await openLibrary(library, extensionId);
 
   await expect(library.getByRole('navigation', { name: 'Library' })).toBeHidden();
   await expect(library.getByRole('button', { name: 'Keyboard shortcuts' })).toBeHidden();

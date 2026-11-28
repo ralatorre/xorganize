@@ -46,8 +46,14 @@ describe('createLibraryEdits', () => {
     await edits.recolour(ACCOUNT, 'tag-1', 3);
     await edits.merge(ACCOUNT, 'tag-2', 'tag-1');
     await edits.deleteTag(ACCOUNT, 'tag-1');
-    await edits.removePost(ACCOUNT, '1');
-    expect(announced).toEqual(Array(6).fill(ACCOUNT));
+    const removed = await edits.removePost(ACCOUNT, '1');
+    await edits.restorePost(removed!);
+    expect(announced).toEqual(Array(7).fill(ACCOUNT));
+  });
+
+  it('announces nothing when the post to remove is not there', async () => {
+    expect(await edits.removePost(ACCOUNT, '404')).toBeUndefined();
+    expect(announced).toEqual([]);
   });
 
   it('announces nothing for reads or refused changes', async () => {

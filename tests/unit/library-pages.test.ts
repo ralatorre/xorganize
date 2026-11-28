@@ -4,6 +4,7 @@ import { accountLabel, sizeLine, storedLine } from '@/src/library/accounts';
 import { DAY_MS, lastBackupLine } from '@/src/library/backup-reminder';
 import { menuIndex } from '@/src/library/menu';
 import { pageOf } from '@/src/library/route';
+import { NO_TOAST, changeToast } from '@/src/library/toast';
 
 const ACCOUNT = '9000000000000000001';
 const OTHER = '9000000000000000002';
@@ -109,5 +110,23 @@ describe('menuIndex', () => {
   it('ignores other keys, and a menu with no items', () => {
     expect(menuIndex(1, 'a', 3)).toBeUndefined();
     expect(menuIndex(-1, 'ArrowDown', 0)).toBeUndefined();
+  });
+});
+
+describe('changeToast', () => {
+  const undo = { label: 'Undo', run: () => undefined };
+
+  it('shows one toast, which a new one replaces', () => {
+    const first = changeToast(NO_TOAST, { type: 'show', message: 'Link copied' });
+    expect(first.shown).toEqual({ id: 1, message: 'Link copied' });
+    const second = changeToast(first, { type: 'show', message: 'Removed', action: undo });
+    expect(second.shown).toEqual({ id: 2, message: 'Removed', action: undo });
+  });
+
+  it('closes only the toast it was asked to', () => {
+    const first = changeToast(NO_TOAST, { type: 'show', message: 'One' });
+    const second = changeToast(first, { type: 'show', message: 'Two' });
+    expect(changeToast(second, { type: 'close', id: 1 })).toBe(second);
+    expect(changeToast(second, { type: 'close', id: 2 }).shown).toBeUndefined();
   });
 });

@@ -39,9 +39,34 @@ export const THEME_TOKENS = `
   }
 `;
 
-export const POPOVER_STYLES = `
-  :host { all: initial; }
-  ${THEME_TOKENS}
+/** Whose look the popover takes: X's on x.com, the library's in the library (DESIGN, 7.4). */
+export type PopoverLook = 'x' | 'library';
+
+/**
+ * The library's tokens, mapped onto the names the popover uses. Custom
+ * properties pass into the shadow root from the page, and `all: initial` on
+ * the host leaves them alone, so these follow the library's theme as it
+ * changes. Its font is the library's packaged one.
+ */
+const LIBRARY_TOKENS = `
+  .theme {
+    --muted: var(--text-2);
+    --accent: var(--accent-ink);
+    --accent-tint: var(--accent-soft);
+    --surface: var(--raised);
+    --row: var(--hover);
+    --shadow: var(--shadow-large);
+    font: 400 14px/20px var(--font);
+    color: var(--text);
+  }
+`;
+
+/** The library's popover has a border and the corners of its other panels. */
+const LIBRARY_RULES = `
+  .dialog { border: 1px solid var(--border); border-radius: 14px; }
+`;
+
+const POPOVER_RULES = `
   .dialog {
     position: fixed;
     z-index: 2147483647;
@@ -119,3 +144,13 @@ export const POPOVER_STYLES = `
   .recent button:hover, .recent button:focus-visible { text-decoration: underline; outline: none; }
   .error { margin: 0; padding: 8px 16px; color: var(--danger); font-size: 13px; }
 `;
+
+export function popoverStyles(look: PopoverLook): string {
+  const library = look === 'library';
+  return `
+    :host { all: initial; }
+    ${library ? LIBRARY_TOKENS : THEME_TOKENS}
+    ${POPOVER_RULES}
+    ${library ? LIBRARY_RULES : ''}
+  `;
+}

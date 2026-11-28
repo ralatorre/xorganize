@@ -11,10 +11,11 @@ import { isXAvatarUrl } from '@/src/hosts';
 import type { LibraryDatabase } from './schema';
 import type {
   AccountId,
+  AccountProfile,
   BackupTimes,
   Counts,
   PostId,
-  AccountProfile,
+  PostTag,
   Settings,
   StoredAccount,
   StoredPost,
@@ -218,18 +219,50 @@ export async function clearSource(
   });
 }
 
+/** What `removePost` took out, so that it can be put back. */
+export interface RemovedPost {
+  post: StoredPost;
+  postTags: PostTag[];
+}
+
 /**
- * Takes a post out of the library, with its tags. If it is still bookmarked
- * or liked on X, it comes back the next time that timeline is loaded.
+ * Takes a post out of the library, with its tags, and returns what it took,
+ * or undefined if the post was not there. If it is still bookmarked or liked
+ * on X, it comes back the next time that timeline is loaded.
  */
 export async function removePost(
   db: LibraryDatabase,
   accountId: AccountId,
   postId: PostId,
-): Promise<void> {
-  await db.transaction('rw', db.posts, db.postTags, async () => {
-    await db.postTags.where('[accountId+postId]').equals([accountId, postId]).delete();
+): Promise<RemovedPost | undefined> {
+  return db.transaction('rw', db.posts, db.postTags, async () => {
+    const post = await db.posts.get([accountId, postId]);
+    if (!post) return undefined;
+    const assigned = db.postTags.where('[accountId+postId]').equals([accountId, postId]);
+    const postTags = await assigned.toArray();
+    await assigned.delete();
     await db.posts.delete([accountId, postId]);
+    return { post, postTags };
+  });
+}
+
+/**
+ * Undoes `removePost` (DESIGN, 8, decision 10): the post and its tags come
+ * back as they were, in one transaction. A tag deleted in the meantime is
+ * left out. If the post was stored again meanwhile, from X, that copy is kept.
+ */
+export async function restorePost(db: LibraryDatabase, removed: RemovedPost): Promise<void> {
+  const { post, postTags } = removed;
+  const { accountId } = post;
+  await db.transaction('rw', db.posts, db.tags, db.postTags, async () => {
+    const [existing, tags] = await Promise.all([
+      db.posts.get([accountId, post.id]),
+      db.tags.bulkGet(postTags.map(({ tagId }): [AccountId, string] => [accountId, tagId])),
+    ]);
+    const kept = postTags.filter((_, index) => tags[index] !== undefined);
+    await db.postTags.bulkPut(kept);
+    const base = existing ?? post;
+    await db.posts.put({ ...base, hasTags: kept.length > 0 || existing?.hasTags === 1 ? 1 : 0 });
   });
 }
 

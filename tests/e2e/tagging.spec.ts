@@ -381,23 +381,23 @@ test('a post tagged on X can be found in the library by its tags', async ({
   await sidebarTag(library, 'Rust').click();
   await expect.poll(() => listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
   await sidebarTag(library, 'to read').click({ modifiers: ['Control'] });
-  await expect(library.getByRole('status')).toHaveText('1 post');
+  await expect(library.locator('.summary__count')).toHaveText('1 post');
   await expect.poll(() => listed(library)).toEqual(['Seen in a timeline']);
   await library.getByRole('radio', { name: 'Any' }).check();
-  await expect(library.getByRole('status')).toHaveText('2 posts');
+  await expect(library.locator('.summary__count')).toHaveText('2 posts');
   await library.getByRole('button', { name: 'Remove filter Rust' }).click();
-  await expect(library.getByRole('status')).toHaveText('1 post');
+  await expect(library.locator('.summary__count')).toHaveText('1 post');
 
   // A tag added on X shows at once.
   await tagFromPage(site, '102', ['to read']);
-  await expect(library.getByRole('status')).toHaveText('2 posts');
+  await expect(library.locator('.summary__count')).toHaveText('2 posts');
   await expect(sidebarTag(library, 'to read')).toContainText('2');
 
   // A filter that matches nothing offers a way back.
   await library.getByRole('button', { name: /^Bookmarks 0$/ }).click();
   await expect(library.getByRole('heading', { name: 'No posts match' })).toBeVisible();
   await library.getByRole('button', { name: 'Clear filters' }).click();
-  await expect(library.getByRole('status')).toHaveText('2 posts');
+  await expect(library.locator('.summary__count')).toHaveText('2 posts');
 
   // Ordered by post date: the newer ID first.
   await library.getByRole('combobox', { name: 'Sort:' }).selectOption('posted');
@@ -406,7 +406,7 @@ test('a post tagged on X can be found in the library by its tags', async ({
   // Found by typing its tag, and by its text.
   const search = library.getByRole('searchbox', { name: 'Search posts' });
   await search.fill('#"to read" #rus');
-  await expect(library.getByRole('status')).toHaveText('2 posts');
+  await expect(library.locator('.summary__count')).toHaveText('2 posts');
   await search.fill('#"dev/web"');
   await expect.poll(() => listed(library)).toEqual(['Only on the page']);
   await search.fill('timeline #rust');
@@ -550,17 +550,39 @@ test('cards are tagged, copied and removed, by pointer and by keyboard', async (
     };
   });
   const card = library.locator('article.post', { hasText: 'Only on the page' });
-  await card.getByRole('button', { name: 'More actions' }).click();
+  const toast = library.locator('.toasts');
   await card.getByRole('button', { name: 'Copy link' }).click();
-  await expect(card.getByRole('status')).toHaveText('Link copied');
+  await expect(toast).toHaveText('Link copied');
   expect(await library.evaluate(() => (window as unknown as { copied: string }).copied)).toBe(
     'https://x.com/example_user/status/102',
   );
 
-  // Remove from library asks first; the post and its tags go, here and on x.com.
-  await card.getByRole('button', { name: 'Remove from library' }).click();
-  const confirm = library.getByRole('dialog', { name: 'Remove this post from the library?' });
-  await confirm.getByRole('button', { name: 'Remove' }).click();
+  // The ⋯ menu offers every action with its shortcut. Remove acts at once,
+  // here and on x.com, and Undo puts the post and its tags back.
+  await card.getByRole('button', { name: 'More actions' }).click();
+  const menu = library.getByRole('menu', { name: 'More actions' });
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    'Edit tagst',
+    'Open on Xo',
+    'Copy link',
+    /^Remove from library/,
+  ]);
+  await menu.getByRole('menuitem', { name: /Remove from library/ }).click();
+  await expect.poll(() => listed(library)).toEqual(['Seen in a timeline']);
+  await expect(toast).toContainText('Removed from library');
+  await expect.poll(() => tagButtons(site)).toEqual(['Tags: Rust, jot', 'Tag']);
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(() => listed(library)).toEqual(['Only on the page', 'Seen in a timeline']);
+  await expect.poll(() => chips(library, 'Only on the page')).toEqual(['go', 'keys']);
+  await expect(toast).toHaveText('');
+  await expect.poll(() => tagButtons(site)).toEqual(['Tags: Rust, jot', 'Tags: go, keys']);
+
+  // Removed and left: the post and its tags go for good.
+  await library
+    .locator('article.post', { hasText: 'Only on the page' })
+    .getByRole('button', { name: 'More actions' })
+    .click();
+  await menu.getByRole('menuitem', { name: /Remove from library/ }).click();
   await expect.poll(() => listed(library)).toEqual(['Seen in a timeline']);
   await expect(sidebarTag(library, 'go')).toContainText('0');
   await expect.poll(() => tagButtons(site)).toEqual(['Tags: Rust, jot', 'Tag']);

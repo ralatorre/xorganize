@@ -13,10 +13,11 @@ import { render } from 'preact';
 import type { Theme } from '@/src/dom/theme';
 import { contain, type KeyboardGuard } from '@/src/inline/keyboard-guard';
 import type { Suggestions } from '@/src/inline/popover-model';
+import type { PopoverAlign } from '@/src/inline/position';
 import type { TagState } from '@/src/inline/tag-state';
 import type { TagEdit } from '@/src/inline/tagger';
 import { createShadowHost } from './shadow';
-import { POPOVER_STYLES } from './styles';
+import { popoverStyles, type PopoverLook } from './styles';
 import { TagPopover, type GuardedHandler } from './TagPopover';
 
 /** What the popover opens from: a post's tag button. */
@@ -49,6 +50,10 @@ export interface PopoverDependencies {
   guard: KeyboardGuard;
   /** Where the popover's host is attached while open. */
   mountPoint(): Element;
+  /** Which edge of its button it lines up with. The end by default, as on x.com. */
+  align?: PopoverAlign;
+  /** Whose look it takes: X's on x.com, the library's in the library (DESIGN, 7.4). */
+  look?: PopoverLook;
   suggestDelayMs?: number;
 }
 
@@ -60,7 +65,7 @@ export interface Popover {
 
 export function createPopover(deps: PopoverDependencies): Popover {
   const { view } = deps;
-  const { host, container } = createShadowHost(view.document, POPOVER_STYLES);
+  const { host, container } = createShadowHost(view.document, popoverStyles(deps.look ?? 'x'));
   contain(host);
   let onGuarded: GuardedHandler | undefined;
   deps.guard.protect(host, (event) => onGuarded?.(event));

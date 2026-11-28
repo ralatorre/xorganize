@@ -70,7 +70,9 @@ export function Menu(props: {
             class="dropdown__menu"
             role="menu"
             aria-label={props.label}
-            onClick={(event) => {
+            // Closed before the item acts, so that an item that moves focus,
+            // such as into the tag popover, keeps it there.
+            onClickCapture={(event) => {
               if (event.target instanceof Element && event.target.closest(ITEMS)) close(true);
             }}
             onKeyDown={(event) => {

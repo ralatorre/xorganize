@@ -74,6 +74,7 @@ export function TagPopover(props: {
       props.anchor.getBoundingClientRect(),
       { width: element.offsetWidth, height: element.offsetHeight },
       { width: view.innerWidth, height: view.innerHeight },
+      { align: deps.align ?? 'end' },
     );
     element.style.top = `${place.top}px`;
     element.style.left = `${place.left}px`;

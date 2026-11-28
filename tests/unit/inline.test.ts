@@ -284,6 +284,18 @@ describe('placePopover', () => {
     );
   });
 
+  it('starts at the button’s left edge when aligned to its start, as in the library', () => {
+    const anchor = { top: 100, left: 400, width: 34, height: 34 };
+    expect(placePopover(anchor, size, viewport, { align: 'start' })).toEqual({
+      top: 142,
+      left: 400,
+      side: 'below',
+    });
+    // Still kept inside the window.
+    const late = { top: 100, left: 900, width: 34, height: 34 };
+    expect(placePopover(late, size, viewport, { align: 'start' }).left).toBe(692);
+  });
+
   it('stays below, inside the window, when there is no room either way', () => {
     const place = placePopover(
       { top: 50, left: 500, width: 34, height: 34 },
