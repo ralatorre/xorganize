@@ -1,6 +1,7 @@
 /*
  * The library's colour tokens, one set per theme (DESIGN, 7.1). The page sets
- * `data-theme` on the root element before anything is drawn. Every value is
+ * `data-theme` on the root element before anything is drawn; Settings' theme
+ * previews set it on themselves, so each is drawn in its own colours. Every value is
  * a hex colour unless it is a shadow or a scrim, so that
  * tests/unit/tokens.test.ts can check each text colour against the
  * backgrounds it is used on.
@@ -16,7 +17,7 @@
   --on-accent: #ffffff;
 }
 
-:root[data-theme='light'] {
+[data-theme='light'] {
   color-scheme: light;
   --bg: #ffffff;
   --surface: #ffffff;
@@ -48,7 +49,7 @@
   --shadow-large: 0 16px 40px -12px rgb(16 24 40 / 0.22), 0 2px 6px rgb(16 24 40 / 0.06);
 }
 
-:root[data-theme='dim'] {
+[data-theme='dim'] {
   color-scheme: dark;
   --bg: #15181e;
   --surface: #1b1f26;
@@ -80,7 +81,7 @@
   --shadow-large: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.03);
 }
 
-:root[data-theme='dark'] {
+[data-theme='dark'] {
   color-scheme: dark;
   --bg: #0a0b0d;
   --surface: #111317;

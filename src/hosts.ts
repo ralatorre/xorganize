@@ -28,6 +28,34 @@ export function isSupportedUrl(url: string | undefined): boolean {
  */
 export const X_IMAGE_HOST = 'pbs.twimg.com';
 
+/** Profile pictures are under this path on X_IMAGE_HOST. */
+const AVATAR_PATH = '/profile_images/';
+
+/**
+ * True for a profile picture on X's image server, as it is written there:
+ * https, no port, no credentials, no query, at most 2048 characters.
+ */
+export function isXAvatarUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 2048) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  return (
+    url.href === value &&
+    url.protocol === 'https:' &&
+    url.hostname === X_IMAGE_HOST &&
+    url.port === '' &&
+    url.username === '' &&
+    url.password === '' &&
+    url.search === '' &&
+    url.hash === '' &&
+    url.pathname.startsWith(AVATAR_PATH)
+  );
+}
+
 /**
  * The URL to load for an image from X, or undefined when it is not on
  * X_IMAGE_HOST. Photos are asked for at X's "small" size, which is plenty for

@@ -16,9 +16,10 @@
 import { DIAGNOSTICS } from '@/src/build';
 import { isCapturedPost, type CapturedPost } from '@/src/capture/normalise';
 import type { SourceKind } from '@/src/capture/operations';
-import type { Counts, TagSuggestion, TagSummary } from '@/src/db/types';
+import type { AccountProfile, Counts, TagSuggestion, TagSummary } from '@/src/db/types';
 import { isTheme, type Theme } from '@/src/dom/theme';
-import { isId, isRecord } from '@/src/guards';
+import { isHandle, isId, isRecord } from '@/src/guards';
+import { isXAvatarUrl } from '@/src/hosts';
 import { MAX_TAG_NAME, parseTagName } from '@/src/tags/names';
 
 export { isRecord };
@@ -128,6 +129,15 @@ export interface ThemeSeenMessage {
   theme: Theme;
 }
 
+/**
+ * The signed-in account's @handle and picture, as x.com shows them, for the
+ * library's header. Sent when first read on a page and when they change.
+ */
+export interface AccountSeenMessage extends AccountProfile {
+  type: 'account/seen';
+  accountId: string;
+}
+
 /** The worker's answer to a capture message: the account's totals afterwards. */
 export type CaptureReply = { ok: true; counts: Counts } | { ok: false };
 
@@ -211,7 +221,12 @@ export function isTagsEditedNotice(value: unknown): value is TagsEditedNotice {
 }
 
 export type RuntimeMessage =
-  ContentReadyMessage | CaptureMessage | ThemeSeenMessage | TagMessage | DiagnosticsMessage;
+  | ContentReadyMessage
+  | CaptureMessage
+  | ThemeSeenMessage
+  | AccountSeenMessage
+  | TagMessage
+  | DiagnosticsMessage;
 
 export const MAX_ITEMS = 200;
 /** Posts per tags/for-posts request: more than a screen holds. */
@@ -229,6 +244,13 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
   if (!isRecord(value)) return false;
   if (value.type === 'content/ready') return true;
   if (value.type === 'theme/seen') return isTheme(value.theme);
+  if (value.type === 'account/seen') {
+    return (
+      isId(value.accountId) &&
+      isHandle(value.handle) &&
+      (value.avatarUrl === undefined || isXAvatarUrl(value.avatarUrl))
+    );
+  }
   if (value.type === 'capture/clear') {
     return isId(value.accountId) && isSource(value.source) && isId(value.postId);
   }

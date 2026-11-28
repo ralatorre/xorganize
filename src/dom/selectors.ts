@@ -13,6 +13,10 @@ export const SELECTORS = {
   removeBookmarkButton: '[data-testid="removeBookmark"]',
   likeButton: '[data-testid="like"]',
   unlikeButton: '[data-testid="unlike"]',
+  /** The link to the signed-in account's own profile, in X's sidebar. */
+  profileLink: 'a[data-testid="AppTabBar_Profile_Link"]',
+  /** X's account button, at the foot of its sidebar, with the account's avatar. */
+  accountSwitcher: '[data-testid="SideNav_AccountSwitcher_Button"]',
 } as const;
 
 export type SelectorName = keyof typeof SELECTORS;

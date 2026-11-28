@@ -24,6 +24,9 @@ export function SearchBox(props: {
         value={props.query}
         onInput={(event) => props.onChange(event.currentTarget.value)}
       />
+      <kbd class="search__key" aria-hidden="true">
+        /
+      </kbd>
     </div>
   );
 }

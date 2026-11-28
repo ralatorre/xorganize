@@ -352,6 +352,13 @@ describe('reading the library', () => {
     expect((await loadCatalogue(db)).xTheme).toBe('dim');
   });
 
+  it('carries what this browser holds for each account', async () => {
+    await sample();
+    const [account] = (await loadCatalogue(db)).accounts;
+    expect(account).toMatchObject({ accountId: ACCOUNT, posts: expect.any(Number) as number });
+    expect(account!.posts).toBeGreaterThan(0);
+  });
+
   it('counts sources and tags, and lists every post newest in the library first', async () => {
     await sample();
     const browse = await loadBrowse(DEFAULT_VIEW);

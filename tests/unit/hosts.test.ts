@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { X_MATCHES, isSupportedUrl, xImageUrl } from '@/src/hosts';
+import { X_MATCHES, isSupportedUrl, isXAvatarUrl, xImageUrl } from '@/src/hosts';
 
 describe('X_MATCHES', () => {
   it('covers exactly one host', () => {
@@ -28,6 +28,29 @@ describe('isSupportedUrl', () => {
     'chrome-extension://abcdef/library.html',
   ])('rejects %s', (url) => {
     expect(isSupportedUrl(url)).toBe(false);
+  });
+});
+
+describe('isXAvatarUrl', () => {
+  it('accepts a profile picture on X’s image server', () => {
+    expect(isXAvatarUrl('https://pbs.twimg.com/profile_images/1/abc_normal.jpg')).toBe(true);
+  });
+
+  it.each([
+    undefined,
+    1,
+    '',
+    'http://pbs.twimg.com/profile_images/1/abc_normal.jpg',
+    'https://pbs.twimg.com:444/profile_images/1/abc_normal.jpg',
+    'https://user@pbs.twimg.com/profile_images/1/abc_normal.jpg',
+    'https://pbs.twimg.com.example/profile_images/1/abc_normal.jpg',
+    'https://pbs.twimg.com/media/abc.jpg',
+    'https://pbs.twimg.com/profile_images/1/abc_normal.jpg?x=1',
+    'https://pbs.twimg.com/profile_images/1/abc_normal.jpg#x',
+    'https://PBS.twimg.com/profile_images/1/abc_normal.jpg',
+    `https://pbs.twimg.com/profile_images/${'a'.repeat(2048)}`,
+  ])('refuses %j', (value) => {
+    expect(isXAvatarUrl(value)).toBe(false);
   });
 });
 

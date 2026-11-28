@@ -38,3 +38,11 @@ export function reminderMessage(reminder: Reminder & { due: true }, now: number)
   const days = Math.max(0, Math.floor((now - reminder.lastBackupAt) / DAY_MS));
   return `Your last backup was ${plural(days, 'day')} ago.`;
 }
+
+/** Settings' line under Back up the library: when it was last done. */
+export function lastBackupLine(times: BackupTimes, now: number): string {
+  if (times.lastBackupAt === undefined) return 'Never backed up.';
+  const days = Math.max(0, Math.floor((now - times.lastBackupAt) / DAY_MS));
+  if (days === 0) return 'Last backed up today.';
+  return `Last backed up ${days === 1 ? 'yesterday' : `${plural(days, 'day')} ago`}.`;
+}

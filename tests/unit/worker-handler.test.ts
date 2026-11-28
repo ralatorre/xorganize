@@ -44,6 +44,7 @@ function setup(outcome: 'stored' | 'failed' = 'stored') {
   const changes: TagChange[] = [];
   const notified: TagsChangedMessage[] = [];
   const themes: Theme[] = [];
+  const handles: string[] = [];
   const result = <T>(value: T) =>
     outcome === 'stored' ? Promise.resolve(value) : Promise.reject(new Error('quota'));
   const handle = createWorkerHandler({
@@ -60,9 +61,13 @@ function setup(outcome: 'stored' | 'failed' = 'stored') {
       set: (change) => (changes.push(change), result([RUST])),
     },
     recordTheme: (theme) => (themes.push(theme), result(undefined)),
+    recordProfile: (accountId, profile) => (
+      handles.push(`${accountId} ${JSON.stringify(profile)}`),
+      result(undefined)
+    ),
     notify: (message) => void notified.push(message),
   });
-  return { handle, saved, cleared, changes, notified, themes };
+  return { handle, saved, cleared, changes, notified, themes, handles };
 }
 
 describe('createWorkerHandler', () => {
@@ -96,6 +101,28 @@ describe('createWorkerHandler', () => {
 
   it('says so when the theme cannot be kept, without rejecting', async () => {
     const message = { type: 'theme/seen', theme: 'dark' };
+    expect(await setup('failed').handle(message, FROM_X)).toEqual({ ok: false });
+  });
+
+  it('keeps the handle and picture x.com shows for an account, and nothing else', async () => {
+    const { handle, handles } = setup();
+    const id = '9000000000000000001';
+    const seen = { type: 'account/seen', accountId: id, handle: 'some_one' };
+    expect(await handle(seen, FROM_X)).toEqual({ ok: true });
+    const pictured = {
+      ...seen,
+      avatarUrl: 'https://pbs.twimg.com/profile_images/1/abc_normal.jpg',
+      extra: 'dropped',
+    };
+    expect(await handle(pictured, FROM_X)).toEqual({ ok: true });
+    expect(handles).toEqual([
+      `${id} {"handle":"some_one"}`,
+      `${id} {"handle":"some_one","avatarUrl":"https://pbs.twimg.com/profile_images/1/abc_normal.jpg"}`,
+    ]);
+  });
+
+  it('says so when the handle cannot be kept, without rejecting', async () => {
+    const message = { type: 'account/seen', accountId: '9000000000000000001', handle: 'some_one' };
     expect(await setup('failed').handle(message, FROM_X)).toEqual({ ok: false });
   });
 

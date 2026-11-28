@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { DIAGNOSTICS } from '@/src/build';
-import { clearSource, recordXTheme, saveCapture } from '@/src/db/repo';
+import { clearSource, recordProfile, recordXTheme, saveCapture } from '@/src/db/repo';
 import { library } from '@/src/db/schema';
 import { RECENT_TAGS, recentTags, setPostTags, suggestTags, tagsForPosts } from '@/src/db/tags';
 import { createDiagnosticsStore } from '@/src/diagnostics/store';
@@ -33,6 +33,7 @@ export default defineBackground(() => {
       set: (change) => setPostTags(db, change),
     },
     recordTheme: (theme) => recordXTheme(db, theme),
+    recordProfile: (accountId, profile) => recordProfile(db, accountId, profile),
     notify: (message) => listeners.broadcast(message),
     ...(DIAGNOSTICS ? { diagnostics: createDiagnosticsStore(indexedDB) } : {}),
   });

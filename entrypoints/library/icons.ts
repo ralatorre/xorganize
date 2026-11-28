@@ -86,6 +86,9 @@ export const ICONS = {
   tick: [{ path: 'm5 12 5 5 9-10' }],
   image: [{ rect: [3, 4, 18, 16, 2] }, { circle: [9, 10, 2] }, { path: 'm21 16-5-5-9 9' }],
   play: [{ path: 'M8 5v14l11-7z', filled: true }],
+  back: [{ path: 'M19 12H5' }, { path: 'm11 6-6 6 6 6' }],
+  filter: [{ path: 'M4 6h16M7 12h10M10 18h4' }],
+  appearance: [{ circle: [12, 12, 8.5] }, { path: 'M12 3.5v17a8.5 8.5 0 0 0 0-17z', filled: true }],
 } as const satisfies Record<string, readonly Shape[]>;
 
 export type IconName = keyof typeof ICONS;
